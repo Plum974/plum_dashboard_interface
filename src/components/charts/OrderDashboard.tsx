@@ -1,9 +1,8 @@
 import React from "react";
 import { Card, Space, Row, Col } from "antd";
-import CombinedChart from "./CombinedChart";
+import { Line } from "@ant-design/charts";
 import { fetchAllOrderInPeriodForAnalytics } from "../../api/order";
 import { fetchAllClaimInPeriod } from "../../services/claims/claimApi";
-import { Data } from "plotly.js";
 
 const OrderDashboard: React.FC = () => {
   const fetchFunctions = {
@@ -11,9 +10,9 @@ const OrderDashboard: React.FC = () => {
     claims: fetchAllClaimInPeriod,
   };
 
-  const prepareChartData = (data: { [key: string]: any[] }): Data[] => {
-    const plotData: Data[] = [];
-    
+  const prepareChartData = (data: { [key: string]: any[] }) => {
+    const chartData: any[] = [];
+
     if (data.orders && data.orders.length > 0) {
       // Regrouper les commandes par date
       const ordersByDate: { [date: string]: number } = {};
@@ -22,16 +21,13 @@ const OrderDashboard: React.FC = () => {
         ordersByDate[date] = (ordersByDate[date] || 0) + 1;
       });
 
-      // Convertir en format pour Plotly
-      const orderDates = Object.keys(ordersByDate).sort();
-      const orderCounts = orderDates.map((date) => ordersByDate[date]);
-
-      plotData.push({
-        x: orderDates,
-        y: orderCounts,
-        type: "bar",
-        name: "Commandes",
-        marker: { color: "#1890ff" },
+      // Convertir en format pour Ant Design Charts
+      Object.entries(ordersByDate).forEach(([date, count]) => {
+        chartData.push({
+          date,
+          type: "Commandes",
+          count,
+        });
       });
     }
 
@@ -43,22 +39,17 @@ const OrderDashboard: React.FC = () => {
         claimsByDate[date] = (claimsByDate[date] || 0) + 1;
       });
 
-      // Convertir en format pour Plotly
-      const claimDates = Object.keys(claimsByDate).sort();
-      const claimCounts = claimDates.map((date) => claimsByDate[date]);
-
-      plotData.push({
-        x: claimDates,
-        y: claimCounts,
-        type: "scatter",
-        mode: "lines+markers",
-        name: "Réclamations",
-        marker: { color: "#ff4d4f" },
-        line: { color: "#ff4d4f" },
+      // Convertir en format pour Ant Design Charts
+      Object.entries(claimsByDate).forEach(([date, count]) => {
+        chartData.push({
+          date,
+          type: "Réclamations",
+          count,
+        });
       });
     }
 
-    return plotData;
+    return chartData.sort((a, b) => a.date.localeCompare(b.date));
   };
 
   return (
@@ -66,13 +57,38 @@ const OrderDashboard: React.FC = () => {
       <Row gutter={[16, 16]}>
         <Col span={24}>
           <Card title="Tableau de bord des commandes" bordered={false}>
-            <CombinedChart
-              title="Évolution des commandes et réclamations"
-              fetchDataFunctions={fetchFunctions}
-              prepareDataFunction={prepareChartData}
-              xAxisTitle="Date"
-              yAxisTitle="Nombre"
-            />
+            <div style={{ height: "400px" }}>
+              <Line
+                data={[]} // Les données seront chargées dynamiquement
+                xField="date"
+                yField="count"
+                seriesField="type"
+                color={["#1890ff", "#ff4d4f"]}
+                point={{
+                  size: 5,
+                  shape: "circle",
+                }}
+                line={{
+                  style: {
+                    lineWidth: 3,
+                  },
+                }}
+                legend={{
+                  position: "top",
+                }}
+                xAxis={{
+                  title: {
+                    text: "Date",
+                  },
+                }}
+                yAxis={{
+                  title: {
+                    text: "Nombre",
+                  },
+                }}
+                smooth={true}
+              />
+            </div>
           </Card>
         </Col>
       </Row>
@@ -80,4 +96,4 @@ const OrderDashboard: React.FC = () => {
   );
 };
 
-export default OrderDashboard; 
+export default OrderDashboard;

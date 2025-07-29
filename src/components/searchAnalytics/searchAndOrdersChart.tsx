@@ -2,8 +2,14 @@ import React, { useContext, useState } from "react";
 import { DatePicker, Spin } from "antd";
 import type { RangePickerProps } from "antd/es/date-picker";
 import dayjs from "dayjs";
-import Plot from "react-plotly.js";
-import { Data } from "plotly.js";
+import {
+  PieChart,
+  Pie,
+  Cell,
+  ResponsiveContainer,
+  Legend,
+  Tooltip,
+} from "recharts";
 import { Order } from "../../types/orderTypes";
 import { ColorModeContext } from "../../contexts/color-mode";
 import { fetchAllOrderInPeriod } from "../../services/analytics/order/allOrderApi";
@@ -16,7 +22,7 @@ const SearchAndOrdersChart: React.FC = () => {
   const [isOrderLoading, setIsOrderLoading] = useState<boolean>(false);
   const [isSearchLoading, setIsSearchLoading] = useState<boolean>(false);
   const [orderData, setOrderData] = useState<Date[]>([]);
-  const [searchData, setSearchData] = useState<Date[]>([]); 
+  const [searchData, setSearchData] = useState<Date[]>([]);
   const [startDate, setStartDate] = useState<string>("");
   const [endDate, setEndDate] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
@@ -24,7 +30,7 @@ const SearchAndOrdersChart: React.FC = () => {
   /**
    * Fonction pour récupérer les commandes par date.
    */
-   const fetchOrdersByDate = async (startDate: string, endDate: string) => {
+  const fetchOrdersByDate = async (startDate: string, endDate: string) => {
     setIsOrderLoading(true);
     setError(null);
     console.log("🛑🛑🛑🛑🛑🛑🛑🛑");
@@ -33,7 +39,10 @@ const SearchAndOrdersChart: React.FC = () => {
       const orders = await fetchAllOrderInPeriod(startDate, endDate);
       setOrderData(orders);
     } catch (error) {
-      console.error("------ Error on fetch order by date (allOrderComponent): ", error);
+      console.error(
+        "------ Error on fetch order by date (allOrderComponent): ",
+        error,
+      );
       setError("Failed to fetch orders. Please try again.");
     } finally {
       setIsOrderLoading(false);
@@ -46,10 +55,12 @@ const SearchAndOrdersChart: React.FC = () => {
     setError(null);
     try {
       const searches = await fetchSearchAnalyticsByPeriod(startDate, endDate);
-      //console.log("Search Data:", searches); // Log pour vérifier les données des recherches
       setSearchData(searches);
     } catch (error) {
-      console.error("------ Error on fetch search by date (searchCircle): ", error);
+      console.error(
+        "------ Error on fetch search by date (searchCircle): ",
+        error,
+      );
       setError("Failed to fetch search data. Please try again.");
     } finally {
       setIsSearchLoading(false);
@@ -71,88 +82,100 @@ const SearchAndOrdersChart: React.FC = () => {
     }
   };
 
-  // Préparer les données pour Plotly
-  const preparePlotlyData = (
-    searchDates: Date[], // Tableau de dates
-    orders: Date[]
-  ): Data[] => {
+  // Préparer les données pour Recharts - Camembert
+  const prepareChartData = (searchDates: Date[], orders: Date[]) => {
     // Filtrer les dates invalides
-    const validSearchDates = searchDates.filter((date) => dayjs(date).isValid());
+    const validSearchDates = searchDates.filter((date) =>
+      dayjs(date).isValid(),
+    );
 
-    // Combiner toutes les dates uniques des recherches et des commandes
-    const allDates = [
-      ...validSearchDates.map((date) => dayjs(date).format("YYYY-MM-DD")), // Convertir les dates en format YYYY-MM-DD
-      ...orders.map((order) => dayjs(order).format("YYYY-MM-DD")), // Convertir les dates en format YYYY-MM-DD
-    ];
-
-    // Créer un ensemble de dates uniques et les trier
-    const uniqueDates = Array.from(new Set(allDates)).sort();
-
-    // Compter le nombre de recherches pour chaque date
-    const searchCounts = uniqueDates.map((date) => {
-      return validSearchDates.filter((searchDate) => dayjs(searchDate).format("YYYY-MM-DD") === date).length;
-    });
-
-    // Compter le nombre de commandes pour chaque date
-    const orderCounts = uniqueDates.map((date) => {
-      return orders.filter((order) => dayjs(order).format("YYYY-MM-DD") === date).length;
-    });
-
-    console.log("Unique Dates:", uniqueDates); 
-    console.log("Search Counts:", searchCounts);
-    console.log("Order Counts:", orderCounts); 
+    // Compter le total des recherches et commandes
+    const totalSearches = validSearchDates.length;
+    const totalOrders = orders.length;
 
     return [
       {
-        type: "bar",
-        x: uniqueDates,
-        y: searchCounts,
         name: "Recherches",
-        marker: { color: "#8884d8" },
+        value: totalSearches,
+        color: "#148EFF",
       },
       {
-        type: "scatter",
-        x: uniqueDates,
-        y: orderCounts,
-        mode: "lines+markers",
         name: "Commandes",
-        line: { color: "#82ca9d", shape: "spline" },
-        marker: { color: "#82ca9d", size: 10 },
+        value: totalOrders,
+        color: "#faad14",
       },
     ];
   };
 
   // Préparer les données pour le graphique
-  const plotlyData = preparePlotlyData(searchData || [], orderData || []);
+  const chartData = prepareChartData(searchData || [], orderData || []);
 
-  // Configuration du layout pour Plotly
-  const layout = {
-    title: "Recherches et Commandes par période",
-    xaxis: {
-      title: "Date",
-    },
-    yaxis: {
-      title: "Nombre",
-      type: "log" as const,
-    },
-    plot_bgcolor: mode === "light" ? "#fff" : "#333",
-    paper_bgcolor: mode === "light" ? "#fff" : "#333",
-    font: { color: mode === "light" ? "#000" : "#fff" },
-    barmode: "overlay" as const,
+  // Couleurs personnalisées
+  const COLORS = ["#148EFF", "#faad14"];
+
+  // Tooltip personnalisé
+  const CustomTooltip = ({ active, payload }: any) => {
+    if (active && payload && payload.length) {
+      return (
+        <div
+          style={{
+            backgroundColor: mode === "dark" ? "#333" : "#fff",
+            border: "1px solid #ccc",
+            padding: "10px",
+            borderRadius: "5px",
+          }}
+        >
+          <p style={{ color: mode === "dark" ? "#fff" : "#000" }}>
+            {`${payload[0].name}: ${payload[0].value}`}
+          </p>
+        </div>
+      );
+    }
+    return null;
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
       {error && <div style={{ color: "red" }}>{error}</div>}
       <RangePicker onChange={handleDateChange} />
       {isOrderLoading || isSearchLoading ? (
         <Spin tip="Loading..." />
+      ) : chartData.length > 0 ? (
+        <div style={{ width: "100%", height: "400px" }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart>
+              <Pie
+                data={chartData}
+                cx="50%"
+                cy="50%"
+                innerRadius={60}
+                outerRadius={120}
+                paddingAngle={5}
+                dataKey="value"
+              >
+                {chartData.map((entry, index) => (
+                  <Cell
+                    key={`cell-${index}`}
+                    fill={COLORS[index % COLORS.length]}
+                  />
+                ))}
+              </Pie>
+              <Tooltip content={<CustomTooltip />} />
+              <Legend />
+            </PieChart>
+          </ResponsiveContainer>
+        </div>
       ) : (
-        <Plot
-          data={plotlyData}
-          layout={layout}
-          style={{ width: "100%", height: "400px" }}
-        />
+        <div style={{ padding: "20px", textAlign: "center" }}>
+          <p>Sélectionnez une période pour voir les données</p>
+        </div>
       )}
     </div>
   );

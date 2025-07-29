@@ -8,152 +8,201 @@ import { fetchAllOrderInPeriod } from "../../services/analytics/order/allOrderAp
 import { fetchAllClaimInPeriod } from "../../services/claims/claimApi";
 import { RangePickerProps } from "antd/es/date-picker";
 import dayjs from "dayjs";
-import Plot from "react-plotly.js";
-import { Data } from "plotly.js";
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+} from "recharts";
 
 const { RangePicker } = DatePicker;
 
 const ClaimAndOrderChart: React.FC = () => {
-    const { mode } = useContext(ColorModeContext);
-    const [isOrderLoading, setIsOrderLoading] = useState<boolean>(false);
-    const [isClaimLoading, setIsClaimLoading] = useState<boolean>(false);
-    const [orderData, setOrderData] = useState<Date[]>([]);
-    const [claimData, setClaimData] = useState<Date[]>([]);
-    const [startDate, setStartDate] = useState<string>("");
-    const [endDate, setEndDate] = useState<string>("");
-    const [error, setError] = useState<string | null>(null);
+  const { mode } = useContext(ColorModeContext);
+  const [isOrderLoading, setIsOrderLoading] = useState<boolean>(false);
+  const [isClaimLoading, setIsClaimLoading] = useState<boolean>(false);
+  const [orderData, setOrderData] = useState<Date[]>([]);
+  const [claimData, setClaimData] = useState<Date[]>([]);
+  const [startDate, setStartDate] = useState<string>("");
+  const [endDate, setEndDate] = useState<string>("");
+  const [error, setError] = useState<string | null>(null);
 
-    // Fonction pour récupérer les commandes
-    const fetchOrdersByDate = async (startDate: string, endDate: string) => {
-        setIsOrderLoading(true);
-        setError(null);
-        try {
-          const orders = await fetchAllOrderInPeriod(startDate, endDate);
-          setOrderData(orders);
-        } catch (error) {
-          console.error("------ Error on fetch order by date (allOrderComponent): ", error);
-          setError("Failed to fetch orders. Please try again.");
-        } finally {
-          setIsOrderLoading(false);
-        }
+  // Fonction pour récupérer les commandes
+  const fetchOrdersByDate = async (startDate: string, endDate: string) => {
+    setIsOrderLoading(true);
+    setError(null);
+    try {
+      const orders = await fetchAllOrderInPeriod(startDate, endDate);
+      setOrderData(orders);
+    } catch (error) {
+      console.error(
+        "------ Error on fetch order by date (allOrderComponent): ",
+        error,
+      );
+      setError("Failed to fetch orders. Please try again.");
+    } finally {
+      setIsOrderLoading(false);
+    }
+  };
+
+  const fetchClaimsByDate = async (startDate: string, endDate: string) => {
+    setIsClaimLoading(true);
+    setError(null);
+    try {
+      const claims = await fetchAllClaimInPeriod(startDate, endDate);
+      setClaimData(claims);
+    } catch (error) {
+      console.error(
+        "------ Error on fetch claim by date (claimAndOrderChart): ",
+        error,
+      );
+      setError("Failed to fetch claims. Please try again.");
+    } finally {
+      setIsClaimLoading(false);
+    }
+  };
+
+  const handleDateChange: RangePickerProps["onChange"] = (dates) => {
+    if (dates) {
+      const [start, end] = dates;
+      const startDatePicker = start?.format("YYYY-MM-DD") || "";
+      const endDatePicker = end?.format("YYYY-MM-DD") || "";
+      setStartDate(startDatePicker);
+      setEndDate(endDatePicker);
+
+      // Appeler les fonctions pour récupérer les données
+      fetchOrdersByDate(startDatePicker, endDatePicker);
+      fetchClaimsByDate(startDatePicker, endDatePicker);
+    }
+  };
+
+  // Préparer les données pour Recharts - Graphique en ligne
+  const prepareChartData = (orders: Date[], claims: Date[]) => {
+    // Filtrer les dates invalides
+    const validClaims = claims.filter((date) => dayjs(date).isValid());
+
+    // Combiner toutes les dates uniques
+    const allDates = [
+      ...validClaims.map((date) => dayjs(date).format("YYYY-MM-DD")),
+      ...orders.map((order) => dayjs(order).format("YYYY-MM-DD")),
+    ];
+
+    // Créer un ensemble de dates uniques et les trier
+    const uniqueDates = Array.from(new Set(allDates)).sort();
+
+    // Créer les données pour le graphique en ligne
+    const chartData = uniqueDates.map((date) => {
+      const claimCount = claims.filter(
+        (claimDate) => dayjs(claimDate).format("YYYY-MM-DD") === date,
+      ).length;
+
+      const orderCount = orders.filter(
+        (order) => dayjs(order).format("YYYY-MM-DD") === date,
+      ).length;
+
+      return {
+        date,
+        Commandes: orderCount,
+        Réclamations: claimCount,
       };
+    });
 
-      const fetchClaimsByDate = async (startDate: string, endDate: string) => {
-        setIsClaimLoading(true);
-        setError(null);
-        try {
-            const claims = await fetchAllClaimInPeriod(startDate, endDate);
-            setClaimData(claims); // claims est de type Claim[]
-        } catch (error) {
-            console.error("------ Error on fetch claim by date (claimAndOrderChart): ", error);
-            setError("Failed to fetch claims. Please try again.");
-        } finally {
-            setIsClaimLoading(false);
-        }
-    };
+    console.log("Chart Data:", chartData);
+    return chartData;
+  };
 
-      const handleDateChange: RangePickerProps["onChange"] = (dates) => {
-        if (dates) {
-          const [start, end] = dates;
-          const startDatePicker = start?.format("YYYY-MM-DD") || "";
-          const endDatePicker = end?.format("YYYY-MM-DD") || "";
-          setStartDate(startDatePicker);
-          setEndDate(endDatePicker);
+  const chartData = prepareChartData(orderData || [], claimData || []);
 
-          // Appeler les fonctions pour récupérer les données
-          fetchOrdersByDate(startDatePicker, endDatePicker);
-          fetchClaimsByDate(startDatePicker, endDatePicker);
-        }
-      };
-
-      // Préparer les données pour l'histogramme des recherches et les points des commandes
-      const preparePlotlyData = (
-        orders: Date[],
-        claims: Date[]
-      ): Data[] => {
-
-        // Filtrer les dates invalides
-        const validOrders = claims.filter((date) => dayjs(date).isValid());
-
-        // Combiner toutes les dates uniques des recherches et des commandes
-        
-        const allDates = [
-          ...validOrders.map((date) => dayjs(date).format("YYYY-MM-DD")), // Convertir les dates en format YYYY-MM-DD
-          ...orders.map((order) => dayjs(order).format("YYYY-MM-DD")), // Convertir les dates en format YYYY-MM-DD
-        ];
-
-        // Créer un ensemble de dates uniques et les trier
-        // ici Set permet de supprimer les doublons
-        const uniqueDates = Array.from(new Set(allDates)).sort(); 
-
-        // Compter le nombre de réclamations et de commandes pour chaque date
-        const claimCounts = uniqueDates.map((date) => {
-          // ici filter permet de filtrer les dates qui sont égales à la date de la réclamation
-          return claims.filter((claimDate) => dayjs(claimDate).format("YYYY-MM-DD") === date).length;
-        });
-
-        const orderCounts = uniqueDates.map((date) => {
-          return orders.filter((order) => dayjs(order).format("YYYY-MM-DD") === date).length;
-        });
-
-        console.log("Unique Dates:", uniqueDates); 
-        console.log("Claim Counts:", claimCounts); 
-        console.log("Order Counts:", orderCounts); 
-
-        return [
-            {
-                type: "bar",
-                x: uniqueDates,
-                y: orderCounts,
-                name: "Commandes",
-                marker: { color: "#8884d8" },
-              },
-              {
-                type: "scatter",
-                x: uniqueDates,
-                y: claimCounts,
-                mode: "lines+markers",
-                name: "Réclamations",
-                line: { color: "#82ca9d", shape: "spline" },
-                marker: { color: "#82ca9d", size: 10 },
-              },
-        ];
-    };
-
-    const plotlyData = preparePlotlyData(orderData || [], claimData || []);
-
-    const layout = {
-        title: "Réclamations et Commandes par période",
-        xaxis: { 
-            title: "Date", 
-            type: "category" as const, 
-          },
-          yaxis: { 
-            title: "Nombre",
-            type: "log" as const,
-           },
-          plot_bgcolor: mode === "light" ? "#fff" : "#333",
-          paper_bgcolor: mode === "light" ? "#fff" : "#333",
-          font: { color: mode === "light" ? "#000" : "#fff" },
-          barmode: "overlay" as const, 
-    };
-
-    return (
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
-            {error && <div style={{ color: "red" }}>{error}</div>}
-            <RangePicker onChange={handleDateChange} />
-            {isOrderLoading || isClaimLoading ? (
-                <Spin tip="Loading..." />
-            ) : (
-                <Plot
-                    data={plotlyData}
-                    layout={layout}
-                    style={{ width: "100%", height: "400px" }}
-                />
-            )}
+  // Tooltip personnalisé
+  const CustomTooltip = ({ active, payload, label }: any) => {
+    if (active && payload && payload.length) {
+      return (
+        <div
+          style={{
+            backgroundColor: mode === "dark" ? "#333" : "#fff",
+            border: "1px solid #ccc",
+            padding: "10px",
+            borderRadius: "5px",
+          }}
+        >
+          <p style={{ color: mode === "dark" ? "#fff" : "#000" }}>
+            <strong>Date:</strong> {label}
+          </p>
+          {payload.map((entry: any, index: number) => (
+            <p
+              key={index}
+              style={{
+                color: entry.color,
+                margin: "5px 0",
+              }}
+            >
+              {`${entry.name}: ${entry.value}`}
+            </p>
+          ))}
         </div>
-    );
-};
+      );
+    }
+    return null;
+  };
 
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
+      {error && <div style={{ color: "red" }}>{error}</div>}
+      <RangePicker onChange={handleDateChange} />
+      {isOrderLoading || isClaimLoading ? (
+        <Spin tip="Loading..." />
+      ) : chartData.length > 0 ? (
+        <div style={{ width: "100%", height: "400px" }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={chartData}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis
+                dataKey="date"
+                angle={-45}
+                textAnchor="end"
+                height={80}
+                tick={{ fontSize: 12 }}
+              />
+              <YAxis tick={{ fontSize: 12 }} />
+              <Tooltip content={<CustomTooltip />} />
+              <Legend />
+              <Line
+                type="monotone"
+                dataKey="Commandes"
+                stroke="#1890ff"
+                strokeWidth={3}
+                dot={{ fill: "#1890ff", strokeWidth: 2, r: 5 }}
+                activeDot={{ r: 8 }}
+              />
+              <Line
+                type="monotone"
+                dataKey="Réclamations"
+                stroke="#ff4d4f"
+                strokeWidth={3}
+                dot={{ fill: "#ff4d4f", strokeWidth: 2, r: 5 }}
+                activeDot={{ r: 8 }}
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      ) : (
+        <div style={{ padding: "20px", textAlign: "center" }}>
+          <p>Sélectionnez une période pour voir les données</p>
+        </div>
+      )}
+    </div>
+  );
+};
 
 export default ClaimAndOrderChart;
