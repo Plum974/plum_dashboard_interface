@@ -1,4 +1,4 @@
-import React, { useState, useContext } from "react";
+import React, { useState, useContext, useEffect } from "react";
 import { DatePicker, Spin } from "antd";
 import { fetchAllOrderInPeriodForAnalytics } from "../../services/analytics/order/allOrderApi";
 import { Order } from "../../types/orderTypes";
@@ -25,6 +25,21 @@ const OrderEvolutionBarChart: React.FC = () => {
   const [orderData, setOrderData] = useState<Order[]>([]);
   const [startDate, setStartDate] = useState<string>("");
   const [endDate, setEndDate] = useState<string>("");
+
+  // Initialiser avec une période d'un mois à partir d'aujourd'hui
+  useEffect(() => {
+    const today = dayjs();
+    const oneMonthAgo = today.subtract(1, "month");
+
+    const defaultStartDate = oneMonthAgo.format("YYYY-MM-DD");
+    const defaultEndDate = today.format("YYYY-MM-DD");
+
+    setStartDate(defaultStartDate);
+    setEndDate(defaultEndDate);
+
+    // Charger les données par défaut
+    fetchOrdersByDate(defaultStartDate, defaultEndDate);
+  }, []);
 
   const fetchOrdersByDate = async (startDate: string, endDate: string) => {
     setLoading(true);
@@ -94,10 +109,7 @@ const OrderEvolutionBarChart: React.FC = () => {
       ? getOrdersByPeriod(orderData, startDate, endDate)
       : [];
 
-  const maxValue =
-    data.length > 0
-      ? Math.max(...data.map((item) => item.count))
-      : 10;
+  const maxValue = data.length > 0 ? Math.max(...data.map((item) => item.count)) : 10;
 
   // Tooltip personnalisé
   const CustomTooltip = ({ active, payload, label }: any) => {
@@ -130,13 +142,20 @@ const OrderEvolutionBarChart: React.FC = () => {
         flexDirection: "column",
         alignItems: "center",
         justifyContent: "center",
+        height: "100%",
       }}
     >
-      <RangePicker onChange={handleDateChange} />
+      <RangePicker
+        onChange={handleDateChange}
+        value={
+          startDate && endDate ? [dayjs(startDate), dayjs(endDate)] : undefined
+        }
+        style={{ marginBottom: "10px" }}
+      />
       {loading ? (
         <Spin tip="Loading..." />
       ) : data.length > 0 ? (
-        <div style={{ width: "100%", height: "300px" }}>
+        <div style={{ width: "100%", height: "300px", flex: 1 }}>
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={data}>
               <CartesianGrid strokeDasharray="3 3" />
@@ -163,7 +182,16 @@ const OrderEvolutionBarChart: React.FC = () => {
           </ResponsiveContainer>
         </div>
       ) : (
-        <div style={{ padding: "20px", textAlign: "center" }}>
+        <div
+          style={{
+            padding: "20px",
+            textAlign: "center",
+            flex: 1,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
           <p>Sélectionnez une période pour voir les données</p>
         </div>
       )}

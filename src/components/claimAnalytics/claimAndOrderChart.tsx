@@ -1,5 +1,5 @@
 import { DatePicker, Spin } from "antd";
-import { useContext } from "react";
+import { useContext, useEffect } from "react";
 import { Claim } from "../../types/claim";
 import { useState } from "react";
 import { Order } from "../../types/orderTypes";
@@ -30,6 +30,22 @@ const ClaimAndOrderChart: React.FC = () => {
   const [startDate, setStartDate] = useState<string>("");
   const [endDate, setEndDate] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
+
+  // Initialiser avec une période d'un mois à partir d'aujourd'hui
+  useEffect(() => {
+    const today = dayjs();
+    const oneMonthAgo = today.subtract(1, "month");
+
+    const defaultStartDate = oneMonthAgo.format("YYYY-MM-DD");
+    const defaultEndDate = today.format("YYYY-MM-DD");
+
+    setStartDate(defaultStartDate);
+    setEndDate(defaultEndDate);
+
+    // Charger les données par défaut
+    fetchOrdersByDate(defaultStartDate, defaultEndDate);
+    fetchClaimsByDate(defaultStartDate, defaultEndDate);
+  }, []);
 
   // Fonction pour récupérer les commandes
   const fetchOrdersByDate = async (startDate: string, endDate: string) => {
@@ -156,14 +172,21 @@ const ClaimAndOrderChart: React.FC = () => {
         flexDirection: "column",
         alignItems: "center",
         justifyContent: "center",
+        height: "100%",
       }}
     >
       {error && <div style={{ color: "red" }}>{error}</div>}
-      <RangePicker onChange={handleDateChange} />
+      <RangePicker
+        onChange={handleDateChange}
+        value={
+          startDate && endDate ? [dayjs(startDate), dayjs(endDate)] : undefined
+        }
+        style={{ marginBottom: "10px" }}
+      />
       {isOrderLoading || isClaimLoading ? (
         <Spin tip="Loading..." />
       ) : chartData.length > 0 ? (
-        <div style={{ width: "100%", height: "400px" }}>
+        <div style={{ width: "100%", height: "300px", flex: 1 }}>
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={chartData}>
               <CartesianGrid strokeDasharray="3 3" />
@@ -197,7 +220,16 @@ const ClaimAndOrderChart: React.FC = () => {
           </ResponsiveContainer>
         </div>
       ) : (
-        <div style={{ padding: "20px", textAlign: "center" }}>
+        <div
+          style={{
+            padding: "20px",
+            textAlign: "center",
+            flex: 1,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
           <p>Sélectionnez une période pour voir les données</p>
         </div>
       )}

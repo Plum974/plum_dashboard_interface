@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useContext } from "react";
 import GlobeComponent from "../../components/globe/globeComponent";
 import { CustomerConfirmedCounter } from "../../components/linking/customerConfirmedCounter";
 import { FliiinkerRefuseCounter } from "../../components/linking/fliiinkerRefuseCounter";
@@ -11,8 +11,11 @@ import SearchAndOrdersChart from "../../components/searchAnalytics/searchAndOrde
 import ClaimAndOrderChart from "../../components/claimAnalytics/claimAndOrderChart";
 import LocationMapPage from "../map/locationMapPage";
 import RealtimeClaimComponentCounter from "../../components/claim/RealtimeClaimComponent";
+import { ColorModeContext } from "../../contexts/color-mode";
 
 export const HomePage: React.FC = () => {
+  const { mode } = useContext(ColorModeContext);
+
   return (
     <div>
       {/* Section des compteurs */}
@@ -20,86 +23,109 @@ export const HomePage: React.FC = () => {
         style={{
           display: "flex",
           flexDirection: "row",
-          justifyContent: "space-between",
+          justifyContent: "space-around",
           alignItems: "center",
           width: "100%",
           flexWrap: "wrap",
           gap: "10px",
         }}
       >
-        <SearchCounter />
-        <OrderConfirmedCounter />
-        <OrderCancelled />
         <CustomerConfirmedCounter />
         <FliiinkerRefuseCounter />
+        <OrderConfirmedCounter />
+        <SearchCounter />
         <RealtimeClaimComponentCounter />
       </div>
 
       {/* Section des graphiques */}
       <div
         style={{
-          display: "flex",
-          flexDirection: "row",
-          justifyContent: "space-around",
-          alignItems: "flex-start",
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(400px, 1fr))",
+          gap: "20px",
           width: "100%",
           marginTop: "20px",
-          flexWrap: "wrap",
-          gap: "20px",
         }}
       >
         {/* Graphique 1: Évolution des commandes */}
         <div
           style={{
-            flex: "1 1 400px",
-            minWidth: "400px",
-            maxWidth: "500px",
-            backgroundColor: "#f5f5f5",
+            backgroundColor: mode === "dark" ? "#1f1f1f" : "#f5f5f5",
             borderRadius: "8px",
             padding: "20px",
             boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+            height: "400px",
+            display: "flex",
+            flexDirection: "column",
           }}
         >
-          <h3 style={{ marginBottom: "15px", textAlign: "center" }}>
+          <h3
+            style={{
+              marginBottom: "15px",
+              textAlign: "center",
+              color: mode === "dark" ? "#fff" : "#000",
+              flexShrink: 0,
+            }}
+          >
             Évolution des commandes
           </h3>
-          <OrderEvolutionBarChart />
+          <div style={{ flex: 1, minHeight: 0 }}>
+            <OrderEvolutionBarChart />
+          </div>
         </div>
 
         {/* Graphique 2: Recherches et commandes */}
         <div
           style={{
-            flex: "1 1 400px",
-            minWidth: "400px",
-            maxWidth: "500px",
-            backgroundColor: "#f5f5f5",
+            backgroundColor: mode === "dark" ? "#1f1f1f" : "#f5f5f5",
             borderRadius: "8px",
             padding: "20px",
             boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+            height: "400px",
+            display: "flex",
+            flexDirection: "column",
           }}
         >
-          <h3 style={{ marginBottom: "15px", textAlign: "center" }}>
+          <h3
+            style={{
+              marginBottom: "15px",
+              textAlign: "center",
+              color: mode === "dark" ? "#fff" : "#000",
+              flexShrink: 0,
+            }}
+          >
             Recherches et commandes
           </h3>
-          <SearchAndOrdersChart />
+          <div style={{ flex: 1, minHeight: 0 }}>
+            <SearchAndOrdersChart />
+          </div>
         </div>
 
         {/* Graphique 3: Réclamations et commandes */}
         <div
           style={{
-            flex: "1 1 400px",
-            minWidth: "400px",
-            maxWidth: "500px",
-            backgroundColor: "#f5f5f5",
+            backgroundColor: mode === "dark" ? "#1f1f1f" : "#f5f5f5",
             borderRadius: "8px",
             padding: "20px",
             boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+            height: "400px",
+            display: "flex",
+            flexDirection: "column",
           }}
         >
-          <h3 style={{ marginBottom: "15px", textAlign: "center" }}>
+          <h3
+            style={{
+              marginBottom: "15px",
+              textAlign: "center",
+              color: mode === "dark" ? "#fff" : "#000",
+              flexShrink: 0,
+            }}
+          >
             Réclamations et commandes
           </h3>
-          <ClaimAndOrderChart />
+          <div style={{ flex: 1, minHeight: 0 }}>
+            <ClaimAndOrderChart />
+          </div>
         </div>
       </div>
     </div>
