@@ -28,6 +28,8 @@ import { ColorModeContext } from "../../contexts/color-mode";
 import {
   fetchLastMessagesForChannels,
   fetchMessagesByChannel,
+  subscribeToMessages,
+  unsubscribeFromMessages,
   LastMessageInfo,
   LastMessagesMap,
 } from "../../services/chat/chatApi";
@@ -320,56 +322,19 @@ const ClaimComponent: React.FC<ClaimComponentProps> = ({
           channelRef.current = null;
         }
 
-        // Créer un nouveau canal avec un nom unique
-        const channelName = `message_chat_${selectedClaim.channel_id}_${Date.now()}`;
-        const channel = supabaseClient
-          .channel(channelName)
-          .on(
-            "postgres_changes",
-            {
-              event: "*",
-              schema: "public",
-              table: "message_chat",
-              filter: `channel_id=eq.${selectedClaim.channel_id}`,
-            },
-            (payload: any) => {
-              switch (payload.eventType) {
-                case "INSERT":
-                  setMessagesState((prevMessages) => [
-                    ...prevMessages,
-                    payload.new as MessageChat,
-                  ]);
-                  // Appeler updateLastMessages de manière optimisée
-                  setTimeout(() => updateLastMessages(), 100);
-                  break;
-                case "UPDATE":
-                  setMessagesState((prevMessages) =>
-                    prevMessages.map((msg) =>
-                      msg.id === payload.new.id ? payload.new : msg,
-                    ),
-                  );
-                  setTimeout(() => updateLastMessages(), 100);
-                  break;
-                case "DELETE":
-                  setMessagesState((prevMessages) =>
-                    prevMessages.filter((msg) => msg.id !== payload.old.id),
-                  );
-                  setTimeout(() => updateLastMessages(), 100);
-                  break;
-              }
-            },
-          )
-          .subscribe((status) => {
-            if (status === "SUBSCRIBED") {
-              console.log("✅ Canal de chat connecté:", channelName);
-            }
-            if (status === "CHANNEL_ERROR") {
-              console.error(
-                "❌ Erreur de connexion au canal de chat:",
-                channelName,
-              );
-            }
-          });
+        // Utiliser le nouveau service de chat centralisé
+        const channel = subscribeToMessages(
+          selectedClaim.channel_id.toString(),
+          (newMessage: MessageChat) => {
+            setMessagesState((prevMessages) => [...prevMessages, newMessage]);
+            // Appeler updateLastMessages de manière optimisée
+            setTimeout(() => updateLastMessages(), 100);
+          },
+          setMessagesState,
+          (error: any) => {
+            console.error("❌ Erreur de connexion au canal de chat:", error);
+          },
+        );
 
         channelRef.current = channel;
       }
@@ -377,9 +342,9 @@ const ClaimComponent: React.FC<ClaimComponentProps> = ({
 
     // Nettoyage du canal quand selectedClaim change
     return () => {
-      if (channelRef.current) {
+      if (selectedClaim?.channel_id) {
         console.log("🧹 Nettoyage du canal lors du changement de claim");
-        supabaseClient.removeChannel(channelRef.current);
+        unsubscribeFromMessages(selectedClaim.channel_id.toString());
         channelRef.current = null;
       }
     };

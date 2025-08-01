@@ -1,233 +1,227 @@
 import React, { useEffect, useState } from 'react';
-import { Card, Typography, Space, Progress, Statistic, Button, Table, Tag } from 'antd';
-import { supabaseCache } from '../utils/supabase-cache';
-import { supabaseOptimizer } from '../utils/supabase-optimizer';
+import { Card, Badge, Space, Typography, Button, Alert } from 'antd';
+import { 
+  WifiOutlined, 
+  WifiOffOutlined, 
+  ReloadOutlined, 
+  ExclamationCircleOutlined,
+  CheckCircleOutlined 
+} from '@ant-design/icons';
+import { supabaseClient, checkRealtimeConnection, cleanupAllChannels, reconnectRealtime } from '../utility/supabaseClient';
+import { getActiveNotificationChannels } from '../services/notification/notificationApi';
+import { getActiveChatChannels } from '../services/chat/chatApi';
 
 const { Text, Title } = Typography;
 
-interface CacheStats {
-  size: number;
-  maxSize: number;
-  hitRate: number;
+interface ConnectionStatus {
+  realtime: boolean;
+  channels: any[];
+  notificationChannels: string[];
+  chatChannels: string[];
+  lastCheck: Date;
 }
 
-interface QueryStats {
-  table: string;
-  cacheHits: number;
-  cacheMisses: number;
-  avgResponseTime: number;
-  lastQuery: string;
-}
-
-export const SupabasePerformanceMonitor: React.FC = () => {
-  const [cacheStats, setCacheStats] = useState<CacheStats | null>(null);
-  const [queryStats, setQueryStats] = useState<QueryStats[]>([]);
+const SupabasePerformanceMonitor: React.FC = () => {
+  const [status, setStatus] = useState<ConnectionStatus>({
+    realtime: false,
+    channels: [],
+    notificationChannels: [],
+    chatChannels: [],
+    lastCheck: new Date(),
+  });
   const [isVisible, setIsVisible] = useState(false);
-  const [refreshKey, setRefreshKey] = useState(0);
+
+  const checkStatus = () => {
+    const channels = checkRealtimeConnection();
+    const notificationChannels = getActiveNotificationChannels();
+    const chatChannels = getActiveChatChannels();
+    
+    setStatus({
+      realtime: supabaseClient.realtime?.isConnected?.() || false,
+      channels,
+      notificationChannels,
+      chatChannels,
+      lastCheck: new Date(),
+    });
+  };
 
   useEffect(() => {
-    // Seulement visible en développement
-    if (process.env.NODE_ENV === 'development') {
-      setIsVisible(true);
-    }
+    // Vérifier le statut toutes les 10 secondes
+    const interval = setInterval(checkStatus, 10000);
+    checkStatus(); // Vérification initiale
+
+    return () => clearInterval(interval);
   }, []);
 
-  useEffect(() => {
-    if (isVisible) {
-      updateStats();
-      const interval = setInterval(updateStats, 5000); // Mise à jour toutes les 5 secondes
-      return () => clearInterval(interval);
+  const handleReconnect = async () => {
+    try {
+      await reconnectRealtime();
+      setTimeout(checkStatus, 2000); // Re-vérifier après 2 secondes
+    } catch (error) {
+      console.error('Erreur lors de la reconnexion:', error);
     }
-  }, [isVisible, refreshKey]);
-
-  const updateStats = () => {
-    setCacheStats(supabaseCache.getStats());
-    // Simuler des statistiques de requêtes (à implémenter avec un vrai tracking)
-    setQueryStats([
-      {
-        table: 'order',
-        cacheHits: Math.floor(Math.random() * 50),
-        cacheMisses: Math.floor(Math.random() * 10),
-        avgResponseTime: Math.random() * 200 + 50,
-        lastQuery: new Date().toLocaleTimeString()
-      },
-      {
-        table: 'public_profile',
-        cacheHits: Math.floor(Math.random() * 30),
-        cacheMisses: Math.floor(Math.random() * 5),
-        avgResponseTime: Math.random() * 150 + 30,
-        lastQuery: new Date().toLocaleTimeString()
-      },
-      {
-        table: 'fliiinker_profile',
-        cacheHits: Math.floor(Math.random() * 20),
-        cacheMisses: Math.floor(Math.random() * 3),
-        avgResponseTime: Math.random() * 100 + 20,
-        lastQuery: new Date().toLocaleTimeString()
-      }
-    ]);
   };
 
-  const clearCache = () => {
-    supabaseCache.clear();
-    setRefreshKey(prev => prev + 1);
+  const handleCleanup = () => {
+    cleanupAllChannels();
+    setTimeout(checkStatus, 1000);
   };
 
-  const getCacheEfficiency = () => {
-    if (!cacheStats) return 0;
-    const total = cacheStats.size + (cacheStats.maxSize - cacheStats.size);
-    return total > 0 ? (cacheStats.size / cacheStats.maxSize) * 100 : 0;
-  };
-
-  const getHitRateColor = (hitRate: number) => {
-    if (hitRate >= 80) return 'green';
-    if (hitRate >= 60) return 'orange';
-    return 'red';
-  };
-
-  const getResponseTimeColor = (time: number) => {
-    if (time < 100) return 'green';
-    if (time < 200) return 'orange';
-    return 'red';
-  };
-
-  const columns = [
-    {
-      title: 'Table',
-      dataIndex: 'table',
-      key: 'table',
-      render: (text: string) => <Tag color="blue">{text}</Tag>
-    },
-    {
-      title: 'Cache Hits',
-      dataIndex: 'cacheHits',
-      key: 'cacheHits',
-      render: (value: number) => <Text strong style={{ color: 'green' }}>{value}</Text>
-    },
-    {
-      title: 'Cache Misses',
-      dataIndex: 'cacheMisses',
-      key: 'cacheMisses',
-      render: (value: number) => <Text style={{ color: 'red' }}>{value}</Text>
-    },
-    {
-      title: 'Hit Rate',
-      key: 'hitRate',
-      render: (record: QueryStats) => {
-        const total = record.cacheHits + record.cacheMisses;
-        const hitRate = total > 0 ? (record.cacheHits / total) * 100 : 0;
-        return (
-          <Tag color={getHitRateColor(hitRate)}>
-            {hitRate.toFixed(1)}%
-          </Tag>
-        );
-      }
-    },
-    {
-      title: 'Avg Response (ms)',
-      dataIndex: 'avgResponseTime',
-      key: 'avgResponseTime',
-      render: (value: number) => (
-        <Text style={{ color: getResponseTimeColor(value) }}>
-          {value.toFixed(0)}ms
-        </Text>
-      )
-    },
-    {
-      title: 'Last Query',
-      dataIndex: 'lastQuery',
-      key: 'lastQuery',
-      render: (text: string) => <Text type="secondary">{text}</Text>
+  const getConnectionIcon = () => {
+    if (status.realtime) {
+      return <WifiOutlined style={{ color: '#52c41a' }} />;
     }
-  ];
+    return <WifiOffOutlined style={{ color: '#ff4d4f' }} />;
+  };
 
-  if (!isVisible) return null;
+  const getConnectionText = () => {
+    if (status.realtime) {
+      return 'Connecté';
+    }
+    return 'Déconnecté';
+  };
+
+  if (!isVisible) {
+    return (
+      <Button
+        type="text"
+        icon={<WifiOutlined />}
+        onClick={() => setIsVisible(true)}
+        style={{
+          position: 'fixed',
+          bottom: '20px',
+          right: '20px',
+          zIndex: 1000,
+          background: status.realtime ? '#f6ffed' : '#fff2f0',
+          border: status.realtime ? '1px solid #b7eb8f' : '1px solid #ffccc7',
+        }}
+      />
+    );
+  }
 
   return (
-    <Card 
-      title="Supabase Performance Monitor" 
-      size="small"
-      style={{ 
-        position: 'fixed', 
-        bottom: 20, 
-        left: 20, 
-        width: 400, 
-        zIndex: 1000,
-        backgroundColor: 'rgba(255, 255, 255, 0.95)',
-        backdropFilter: 'blur(10px)',
-        maxHeight: '80vh',
-        overflow: 'auto'
-      }}
-      extra={
+    <Card
+      title={
         <Space>
-          <Button size="small" onClick={() => setRefreshKey(prev => prev + 1)}>
-            🔄
-          </Button>
-          <Button size="small" onClick={clearCache} danger>
-            🗑️
-          </Button>
+          {getConnectionIcon()}
+          <Title level={5} style={{ margin: 0 }}>
+            Monitoring Realtime
+          </Title>
         </Space>
       }
+      style={{
+        position: 'fixed',
+        bottom: '20px',
+        right: '20px',
+        width: '400px',
+        zIndex: 1000,
+        maxHeight: '500px',
+        overflow: 'auto',
+      }}
+      extra={
+        <Button
+          type="text"
+          size="small"
+          onClick={() => setIsVisible(false)}
+        >
+          ×
+        </Button>
+      }
     >
-      <Space direction="vertical" style={{ width: '100%' }} size="small">
-        {cacheStats && (
-          <>
-            <div>
-              <Text strong>Cache Status:</Text>
-              <br />
-              <Progress 
-                percent={getCacheEfficiency()} 
-                size="small" 
-                status={getCacheEfficiency() > 80 ? 'exception' : 'normal'}
+      <Space direction="vertical" style={{ width: '100%' }}>
+        {/* Statut de connexion */}
+        <Alert
+          message={
+            <Space>
+              <Badge 
+                status={status.realtime ? 'success' : 'error'} 
+                text={getConnectionText()}
               />
               <Text type="secondary">
-                {cacheStats.size} / {cacheStats.maxSize} entries
+                Dernière vérification: {status.lastCheck.toLocaleTimeString()}
               </Text>
-            </div>
+            </Space>
+          }
+          type={status.realtime ? 'success' : 'error'}
+          showIcon={false}
+        />
 
-            <div>
-              <Text strong>Cache Hit Rate:</Text>
-              <br />
-              <Text type="secondary">
-                {cacheStats.hitRate.toFixed(1)}% (estimated)
-              </Text>
+        {/* Canaux actifs */}
+        <div>
+          <Text strong>Canaux actifs:</Text>
+          <div style={{ marginTop: '8px' }}>
+            <Text type="secondary">Realtime: {status.channels.length}</Text>
+            <br />
+            <Text type="secondary">Notifications: {status.notificationChannels.length}</Text>
+            <br />
+            <Text type="secondary">Chat: {status.chatChannels.length}</Text>
+          </div>
+        </div>
+
+        {/* Détails des canaux */}
+        {status.channels.length > 0 && (
+          <div>
+            <Text strong>Détails des canaux:</Text>
+            <div style={{ maxHeight: '150px', overflow: 'auto', marginTop: '8px' }}>
+                             {status.channels.map((channel, index) => (
+                 <div key={index} style={{ fontSize: '12px', marginBottom: '4px' }}>
+                   <Text code>{channel.topic}</Text>
+                   <Badge 
+                     status={channel.state === 'SUBSCRIBED' ? 'success' : 'default'} 
+                     text={channel.state}
+                     style={{ marginLeft: '8px' }}
+                   />
+                 </div>
+               ))}
             </div>
-          </>
+          </div>
         )}
 
-        <div>
-          <Text strong>Query Performance:</Text>
-          <Table
-            dataSource={queryStats}
-            columns={columns}
-            pagination={false}
+        {/* Actions */}
+        <Space>
+          <Button
             size="small"
-            style={{ marginTop: 8 }}
+            icon={<ReloadOutlined />}
+            onClick={checkStatus}
+          >
+            Vérifier
+          </Button>
+          <Button
+            size="small"
+            icon={<WifiOutlined />}
+            onClick={handleReconnect}
+            disabled={status.realtime}
+          >
+            Reconnecter
+          </Button>
+          <Button
+            size="small"
+            icon={<ExclamationCircleOutlined />}
+            onClick={handleCleanup}
+            danger
+          >
+            Nettoyer
+          </Button>
+        </Space>
+
+        {/* Conseils */}
+        {!status.realtime && (
+          <Alert
+            message="Connexion perdue"
+            description="La connexion realtime est interrompue. Essayez de reconnecter ou vérifiez votre connexion internet."
+            type="warning"
+            showIcon
           />
-        </div>
+        )}
 
-        <div>
-          <Text strong>Optimizations Active:</Text>
-          <br />
-          <Tag color="green">✅ Cache intelligent</Tag>
-          <Tag color="green">✅ Requêtes conditionnelles</Tag>
-          <Tag color="green">✅ Pagination optimisée</Tag>
-          <Tag color="green">✅ Relations optimisées</Tag>
-        </div>
-
-        <div>
-          <Text strong>Recommendations:</Text>
-          <br />
-          {cacheStats && cacheStats.size > cacheStats.maxSize * 0.8 && (
-            <Text type="warning">⚠️ Cache presque plein, considérez augmenter la taille</Text>
-          )}
-          {queryStats.some(q => (q.cacheHits / (q.cacheHits + q.cacheMisses)) < 0.6) && (
-            <Text type="warning">⚠️ Taux de cache faible, vérifiez les stratégies de cache</Text>
-          )}
-          {queryStats.some(q => q.avgResponseTime > 200) && (
-            <Text type="warning">⚠️ Temps de réponse élevé, optimisez les requêtes</Text>
-          )}
-        </div>
+        {status.channels.length > 10 && (
+          <Alert
+            message="Trop de canaux"
+            description="Il y a beaucoup de canaux actifs. Considérez nettoyer les canaux inutilisés."
+            type="info"
+            showIcon
+          />
+        )}
       </Space>
     </Card>
   );

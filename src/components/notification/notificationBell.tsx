@@ -98,40 +98,86 @@ const NotificationBell: React.FC<NotificationBellProps> = ({ mode }) => {
         
         console.log("🔍 Création du canal:", channelName);
         
-        const channel = setupNotificationChannel(
-          channelIds,
-          channelName,
-          async (newMessage) => {
-            if (newMessage.sender_id === adminId) return;
+        // Créer le canal directement avec Supabase (comme dans le chat qui fonctionne)
+        const channel = supabaseClient
+          .channel(channelName)
+          .on(
+            "postgres_changes",
+            {
+              event: "INSERT",
+              schema: "public",
+              table: "message_chat",
+              filter: channelIds.length > 0 ? `channel_id=in.(${channelIds.join(",")})` : undefined,
+            },
+            async (payload) => {
+              console.log("🔔 Nouveau message reçu dans les notifications:", payload);
+              const newMessage = payload.new as MessageChat;
+              
+              // Vérifier que le message n'est pas de l'admin actuel
+              if (newMessage.sender_id === adminId) {
+                console.log("🔔 Message ignoré (envoyé par l'admin actuel)");
+                return;
+              }
 
-            const sender = await fetchUserById(newMessage.sender_id);
+              const sender = await fetchUserById(newMessage.sender_id);
 
-            setNotifications((prev) => [newMessage, ...prev]);
-            setUnreadCount((prev) => prev + 1);
+              setNotifications((prev) => [newMessage, ...prev]);
+              setUnreadCount((prev) => prev + 1);
 
-            // Mettre à jour les expéditeurs avec le nouvel expéditeur
-            if (sender) {
-              setSenders((prev) => ({
-                ...prev,
-                [newMessage.sender_id]: sender,
-              }));
+              // Mettre à jour les expéditeurs avec le nouvel expéditeur
+              if (sender) {
+                setSenders((prev) => ({
+                  ...prev,
+                  [newMessage.sender_id]: sender,
+                }));
+              }
+
+              message.warning({
+                content: `Nouveau message de ${sender?.first_name || 'Utilisateur'} ${sender?.last_name || ''} : ${newMessage.message}`,
+                duration: 5,
+                style: {
+                  fontSize: "18px",
+                  marginTop: "50px",
+                },
+              });
+            },
+          )
+          .subscribe((status) => {
+            console.log("🔔 Statut du canal de notification:", status, "pour", channelName);
+            
+            if (status === "SUBSCRIBED") {
+              console.log("✅ Canal de notification connecté:", channelName);
             }
-
-            message.warning({
-              content: `Nouveau message de ${sender.first_name} ${sender.last_name} : ${newMessage.message}`,
-              duration: 5,
-              style: {
-                fontSize: "18px",
-                marginTop: "50px",
-              },
-            });
-          },
-        );
+            
+            if (status === "CHANNEL_ERROR") {
+              console.error("❌ Erreur de connexion au canal de notification:", channelName);
+            }
+            
+            if (status === "TIMED_OUT") {
+              console.error("⏰ Timeout de connexion au canal de notification:", channelName);
+            }
+            
+            if (status === "CLOSED") {
+              console.log("🔒 Canal de notification fermé:", channelName);
+            }
+          });
 
         // Stocker la référence du canal et son nom
         channelRef.current = channel;
         currentChannelNameRef.current = channelName;
         console.log("🔍 Canal de notification créé avec succès");
+        
+        // Test de connexion après 2 secondes
+        setTimeout(() => {
+          const channels = supabaseClient.getChannels();
+          console.log(
+            "🔍 Canaux actifs:",
+            channels.map((ch) => ({
+              topic: ch.topic,
+              state: ch.state,
+            })),
+          );
+        }, 2000);
       } catch (error) {
         console.error(
           "Erreur lors de l'initialisation des notifications:",

@@ -51,6 +51,7 @@ import { lazy, Suspense, useEffect } from "react";
 import { useInitialLoad } from "./hooks/useInitialLoad";
 import { ApiMonitor } from "./components/ApiMonitor";
 import PerformanceMonitor from "./components/PerformanceMonitor";
+import RealtimeTest from "./components/RealtimeTest";
 // import SupabasePerformanceMonitor from './components/SupabasePerformanceMonitor';
 import "antd/dist/reset.css";
 import { App as AntApp } from "antd";
@@ -419,6 +420,7 @@ const AppContent: React.FC = () => {
       {/* <ApiMonitor /> */}
       {/* <PerformanceMonitor /> */}
       {/* <SupabasePerformanceMonitor /> */}
+      <RealtimeTest />
     </Refine>
   );
 };
