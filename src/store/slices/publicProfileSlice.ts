@@ -142,18 +142,23 @@ export const fetchPublicProfilesIfNeeded = createAsyncThunk(
     const state = getState() as RootState;
     const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
     
-    if (
-      Object.keys(state.publicProfiles.profiles).length > 0 &&
-      Date.now() - state.publicProfiles.lastFetchTimestamp < CACHE_DURATION
-    ) {
-      return null;
-    }
+    console.log('🔍 [Redux] Vérification du cache des profils publics');
+    console.log('🔍 [Redux] Profils en cache:', Object.keys(state.publicProfiles.profiles).length);
+    console.log('🔍 [Redux] Timestamp:', Date.now() - state.publicProfiles.lastFetchTimestamp);
+    
+    // Pour le moment, forcer le chargement pour debug
+    console.log('🔄 [Redux] Chargement forcé des profils publics');
     
     const { data, error } = await supabaseClient
       .from('public_profile')
       .select('*');
       
-    if (error) throw error;
+    if (error) {
+      console.error('❌ [Redux] Erreur Supabase:', error);
+      throw error;
+    }
+    
+    console.log('✅ [Redux] Profils récupérés depuis Supabase:', data?.length || 0);
     return data;
   }
 );
@@ -240,6 +245,31 @@ const publicProfileSlice = createSlice({
         state.loading = false; // Fin du chargement
         state.error = action.error.message || null; // Stockage de l'erreur
         console.error('Erreur lors de la récupération du profil par ID :', action.error);
+      })
+
+      // Gestion de fetchPublicProfilesIfNeeded
+      .addCase(fetchPublicProfilesIfNeeded.pending, (state) => {
+        console.log('⏳ [Redux] Début du chargement conditionnel des profils publics');
+        state.loading = true;
+      })
+      .addCase(fetchPublicProfilesIfNeeded.fulfilled, (state, action) => {
+        console.log('✅ [Redux] Profils publics chargés conditionnellement');
+        state.loading = false;
+        state.lastFetchTimestamp = Date.now();
+        
+        if (action.payload) {
+          console.log('📥 [Redux] Ajout de', action.payload.length, 'profils au store');
+          action.payload.forEach((profile: Public_profile) => {
+            state.profiles[profile.id] = profile;
+          });
+        } else {
+          console.log('⏭️ [Redux] Utilisation du cache existant');
+        }
+      })
+      .addCase(fetchPublicProfilesIfNeeded.rejected, (state, action) => {
+        console.error('❌ [Redux] Échec du chargement conditionnel des profils publics:', action.error);
+        state.loading = false;
+        state.error = action.error.message || null;
       });
   },
 });
