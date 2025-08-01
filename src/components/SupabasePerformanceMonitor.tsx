@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react';
 import { Card, Badge, Space, Typography, Button, Alert } from 'antd';
 import { 
   WifiOutlined, 
-  WifiOffOutlined, 
   ReloadOutlined, 
   ExclamationCircleOutlined,
   CheckCircleOutlined 
@@ -71,7 +70,6 @@ const SupabasePerformanceMonitor: React.FC = () => {
     if (status.realtime) {
       return <WifiOutlined style={{ color: '#52c41a' }} />;
     }
-    return <WifiOffOutlined style={{ color: '#ff4d4f' }} />;
   };
 
   const getConnectionText = () => {
