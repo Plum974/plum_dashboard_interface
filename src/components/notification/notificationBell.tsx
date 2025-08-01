@@ -11,6 +11,7 @@ import {
 } from "../../services/notification/notificationApi";
 import { fetchUserById } from "../../services/customer/customerApi";
 import { RealtimeChannel } from "@supabase/supabase-js";
+import { useNavigate } from "react-router-dom";
 
 interface NotificationBellProps {
   mode: string;
@@ -22,13 +23,17 @@ const NotificationBell: React.FC<NotificationBellProps> = ({ mode }) => {
   const supabase_url_storage_images = import.meta.env
     .VITE_SUPABASE_STORAGE_URL_FOR_IMAGES;
   const [senders, setSenders] = useState<{ [key: string]: any }>({});
+  const [claimChannels, setClaimChannels] = useState<number[]>([]);
   const adminId = import.meta.env.VITE_CURRENT_USER_ID;
   const { message } = App.useApp();
+  const navigate = useNavigate();
 
   // Ajouter une ref pour stocker le canal
   const channelRef = useRef<RealtimeChannel | null>(null);
   // Ajouter une ref pour éviter les initialisations multiples
   const isInitializedRef = useRef(false);
+  // Ajouter une ref pour stocker le nom du canal actuel
+  const currentChannelNameRef = useRef<string | null>(null);
 
   useEffect(() => {
     console.log("🔍 useEffect - Initialisation des notifications");
@@ -80,9 +85,19 @@ const NotificationBell: React.FC<NotificationBellProps> = ({ mode }) => {
         console.log("🔍 Récupération des canaux de réclamation");
         const channelIds = await fetchClaimChannels();
         console.log("🔍 Canaux de réclamation récupérés: ", channelIds);
+        setClaimChannels(channelIds);
 
-        // Utiliser un nom de canal fixe au lieu d'un timestamp
-        const channelName = `message_notifications_${adminId}`;
+        // Vérifier si un canal avec le même nom existe déjà
+        const channelName = `message_notifications_${adminId}_${Date.now()}`;
+        
+        // Vérifier si on a déjà un canal actif avec ce nom
+        if (currentChannelNameRef.current === channelName) {
+          console.log("🔍 Canal déjà existant, ignoré:", channelName);
+          return;
+        }
+        
+        console.log("🔍 Création du canal:", channelName);
+        
         const channel = setupNotificationChannel(
           channelIds,
           channelName,
@@ -93,7 +108,7 @@ const NotificationBell: React.FC<NotificationBellProps> = ({ mode }) => {
 
             setNotifications((prev) => [newMessage, ...prev]);
             setUnreadCount((prev) => prev + 1);
-            
+
             // Mettre à jour les expéditeurs avec le nouvel expéditeur
             if (sender) {
               setSenders((prev) => ({
@@ -113,8 +128,10 @@ const NotificationBell: React.FC<NotificationBellProps> = ({ mode }) => {
           },
         );
 
-        // Stocker la référence du canal
+        // Stocker la référence du canal et son nom
         channelRef.current = channel;
+        currentChannelNameRef.current = channelName;
+        console.log("🔍 Canal de notification créé avec succès");
       } catch (error) {
         console.error(
           "Erreur lors de l'initialisation des notifications:",
@@ -133,13 +150,56 @@ const NotificationBell: React.FC<NotificationBellProps> = ({ mode }) => {
         console.log(
           "🔍 Suppression du canal de notification lors du démontage",
         );
-        supabaseClient.removeChannel(channelRef.current);
+        try {
+          supabaseClient.removeChannel(channelRef.current);
+        } catch (error) {
+          console.error("Erreur lors de la suppression du canal:", error);
+        }
         channelRef.current = null;
+        currentChannelNameRef.current = null;
       }
       // Réinitialiser le flag lors du démontage
       isInitializedRef.current = false;
     };
   }, []); // Dépendances vides pour éviter les re-souscriptions
+
+  // Filtrer les notifications pour n'afficher que celles des réclamations
+  const filteredNotifications = notifications.filter((notification) =>
+    claimChannels.includes(notification.channel_id),
+  );
+
+  // Fonction pour naviguer vers le chat de réclamation
+  const handleNotificationItemClick = async (notification: MessageChat) => {
+    try {
+      // Récupérer les informations de la réclamation basées sur le channel_id
+      const { data: claimData, error } = await supabaseClient
+        .from("claim")
+        .select("claim_id, claim_slug, order_id")
+        .eq("channel_id", notification.channel_id)
+        .eq("is_active", true)
+        .single();
+
+      if (error) {
+        console.error(
+          "Erreur lors de la récupération de la réclamation:",
+          error,
+        );
+        message.error("Impossible de naviguer vers la réclamation");
+        return;
+      }
+
+      if (claimData) {
+        // Naviguer vers la page de réclamation avec le chat ouvert
+        navigate(`/claim/${claimData.claim_slug}?tab=chat`);
+        setUnreadCount(0);
+      } else {
+        message.warning("Réclamation non trouvée ou inactive");
+      }
+    } catch (error) {
+      console.error("Erreur lors de la navigation:", error);
+      message.error("Erreur lors de la navigation");
+    }
+  };
 
   const handleNotificationClick = () => {
     console.log(
@@ -184,7 +244,7 @@ const NotificationBell: React.FC<NotificationBellProps> = ({ mode }) => {
             ? "0 2px 8px rgba(255,255,255,0.1)"
             : "0 2px 8px rgba(0,0,0,0.1)",
       }}
-      dataSource={notifications}
+      dataSource={filteredNotifications}
       renderItem={(item) => (
         <List.Item
           style={{
@@ -192,6 +252,15 @@ const NotificationBell: React.FC<NotificationBellProps> = ({ mode }) => {
             borderRadius: "10px",
             marginBottom: "1px",
             backgroundColor: colors.backgroundColor,
+            cursor: "pointer",
+            transition: "background-color 0.2s",
+          }}
+          onClick={() => handleNotificationItemClick(item)}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.backgroundColor = mode === "dark" ? "#2a2a2a" : "#f5f5f5";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = colors.backgroundColor;
           }}
         >
           <div
