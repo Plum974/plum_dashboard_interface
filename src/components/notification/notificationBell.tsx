@@ -55,6 +55,28 @@ const NotificationBell: React.FC<NotificationBellProps> = ({ mode }) => {
         console.log("🔍 Historique des notifications chargé:", history);
         setNotifications(history);
 
+        // Charger les informations des expéditeurs
+        console.log("🔍 Chargement des informations des expéditeurs");
+        const senderIds = [...new Set(history.map((msg) => msg.sender_id))];
+        const sendersData: { [key: string]: any } = {};
+
+        for (const senderId of senderIds) {
+          try {
+            const sender = await fetchUserById(senderId);
+            if (sender) {
+              sendersData[senderId] = sender;
+            }
+          } catch (error) {
+            console.error(
+              `Erreur lors du chargement de l'expéditeur ${senderId}:`,
+              error,
+            );
+          }
+        }
+
+        console.log("🔍 Expéditeurs chargés:", sendersData);
+        setSenders(sendersData);
+
         console.log("🔍 Récupération des canaux de réclamation");
         const channelIds = await fetchClaimChannels();
         console.log("🔍 Canaux de réclamation récupérés: ", channelIds);
@@ -71,6 +93,14 @@ const NotificationBell: React.FC<NotificationBellProps> = ({ mode }) => {
 
             setNotifications((prev) => [newMessage, ...prev]);
             setUnreadCount((prev) => prev + 1);
+            
+            // Mettre à jour les expéditeurs avec le nouvel expéditeur
+            if (sender) {
+              setSenders((prev) => ({
+                ...prev,
+                [newMessage.sender_id]: sender,
+              }));
+            }
 
             message.warning({
               content: `Nouveau message de ${sender.first_name} ${sender.last_name} : ${newMessage.message}`,
@@ -177,8 +207,9 @@ const NotificationBell: React.FC<NotificationBellProps> = ({ mode }) => {
               src={
                 senders[item.sender_id]?.avatar
                   ? `${supabase_url_storage_images}/${senders[item.sender_id].avatar}`
-                  : null
+                  : undefined
               }
+              icon={!senders[item.sender_id]?.avatar ? <UserOutlined /> : undefined}
               style={{ marginRight: "10px" }}
             />
 
