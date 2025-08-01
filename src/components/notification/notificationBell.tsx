@@ -235,8 +235,8 @@ const NotificationBell: React.FC<NotificationBellProps> = ({ mode }) => {
       }
 
       if (claimData) {
-        // Naviguer vers la page de réclamation avec le chat ouvert
-        navigate(`/claim/${claimData.claim_slug}?tab=chat`);
+        // Naviguer vers la page de réclamation avec l'ID
+        navigate(`/claim/${claimData.claim_id}`);
         setUnreadCount(0);
       } else {
         message.warning("Réclamation non trouvée ou inactive");

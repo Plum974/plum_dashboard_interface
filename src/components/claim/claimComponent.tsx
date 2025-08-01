@@ -64,6 +64,9 @@ const { Option } = Select;
 interface ClaimComponentProps {
   claims: any[];
   messages: MessageChat[];
+  selectedClaimId?: string;
+  onClaimSelect?: (claimId: string) => void;
+  onBackToList?: () => void;
 }
 
 interface NewMessage {
@@ -125,6 +128,9 @@ const getStatusTranslation = (status: string) => {
 const ClaimComponent: React.FC<ClaimComponentProps> = ({
   claims: initialClaims,
   messages: initialMessages,
+  selectedClaimId,
+  onClaimSelect,
+  onBackToList,
 }) => {
   const { mode } = useContext(ColorModeContext);
   const [selectedClaim, setSelectedClaim] = useState<any | null>(null);
@@ -361,6 +367,32 @@ const ClaimComponent: React.FC<ClaimComponentProps> = ({
     };
   }, []);
 
+  // Sélectionner automatiquement la réclamation basée sur l'URL
+  useEffect(() => {
+    console.log('🔍 Sélection automatique - selectedClaimId:', selectedClaimId, 'claims.length:', claims.length);
+    
+    if (selectedClaimId && claims.length > 0) {
+      // Chercher par claim_id (utilisé dans l'URL) ou par id
+      const claim = claims.find(c => 
+        c.claim_id?.toString() === selectedClaimId || 
+        c.id?.toString() === selectedClaimId
+      );
+      
+      console.log('🔍 Réclamation trouvée:', claim);
+      
+      if (claim) {
+        console.log('✅ Sélection automatique de la réclamation:', claim.claim_id || claim.id);
+        setSelectedClaim(claim);
+        if (isMobile) {
+          setIsChatVisible(true);
+        }
+      } else {
+        console.log('❌ Aucune réclamation trouvée pour ID:', selectedClaimId);
+        console.log('🔍 Claims disponibles:', claims.map(c => ({ id: c.id, claim_id: c.claim_id })));
+      }
+    }
+  }, [selectedClaimId, claims]);
+
   const handleStatusChange = async (claimId: string, newStatus: string) => {
     try {
       // S'assurer que nous avons le claim_id correct
@@ -528,13 +560,26 @@ const ClaimComponent: React.FC<ClaimComponentProps> = ({
     if (isMobile) {
       setIsChatVisible(false);
     }
+    
+    // Utiliser la navigation si disponible
+    if (onBackToList) {
+      onBackToList();
+    }
   };
 
   // Fonction pour gérer la sélection d'une réclamation
   const handleClaimSelection = (claim: any) => {
+    console.log('🔍 Sélection manuelle de la réclamation:', claim);
     setSelectedClaim(claim);
     if (isMobile) {
       setIsChatVisible(true);
+    }
+    
+    // Utiliser la navigation si disponible
+    if (onClaimSelect) {
+      const claimId = claim.claim_id?.toString() || claim.id?.toString();
+      console.log('🧭 Navigation vers claim ID:', claimId);
+      onClaimSelect(claimId);
     }
   };
 

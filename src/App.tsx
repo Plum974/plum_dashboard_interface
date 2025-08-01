@@ -340,6 +340,16 @@ const AppContent: React.FC = () => {
                 </ProtectedRoute>
               }
             />
+            <Route
+              path=":claimId"
+              element={
+                <ProtectedRoute path="/claim/:claimId">
+                  <Suspense fallback={<Spin tip="Chargement..." />}>
+                    <ClaimListLazy />
+                  </Suspense>
+                </ProtectedRoute>
+              }
+            />
           </Route>
           <Route path="/calendar">
             <Route

@@ -3,11 +3,14 @@ import ClaimComponent from "../../components/claim/claimComponent";
 import { ColorModeContext } from "../../contexts/color-mode";
 import { fetchClaimsWithMessages } from "../../services/claims/claimApi";
 import { Spin, Typography, Alert } from "antd";
+import { useParams, useNavigate } from "react-router-dom";
 
 const { Title } = Typography;
 
 const ClaimList: React.FC = () => {
   const { mode } = useContext(ColorModeContext);
+  const { claimId } = useParams<{ claimId: string }>();
+  const navigate = useNavigate();
   const [claims, setClaims] = useState<any[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -94,7 +97,13 @@ const ClaimList: React.FC = () => {
   return (
     <div style={containerStyle}>
       <h2>Réclamations</h2>
-      <ClaimComponent claims={claims} messages={[]} />
+      <ClaimComponent 
+        claims={claims} 
+        messages={[]} 
+        selectedClaimId={claimId}
+        onClaimSelect={(claimId) => navigate(`/claim/${claimId}`)}
+        onBackToList={() => navigate('/claim')}
+      />
     </div>
   );
 };
