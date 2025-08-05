@@ -554,7 +554,7 @@ const ClaimComponent: React.FC<ClaimComponentProps> = ({
                   message: lastMessage.message,
                   time: formatLastMessageTime(lastMessage),
                 } : {
-                  message: "Aucun message",
+                  message: "",
                   time: "",
                 };
 
@@ -644,7 +644,7 @@ const ClaimComponent: React.FC<ClaimComponentProps> = ({
                             color: mode === "dark" ? "#9aa0a6" : "#5f6368",
                           }}
                         >
-                          {lastMessageInfo.message || "Aucun message"}
+                          {lastMessageInfo.message || ""}
                         </div>
 
                         {claim.order_id && (

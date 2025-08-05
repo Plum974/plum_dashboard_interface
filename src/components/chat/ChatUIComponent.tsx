@@ -102,7 +102,7 @@ const ChatUIComponent: React.FC<ChatUIComponentProps> = ({
                 className={`chat-messages ${isDarkMode ? 'dark' : ''}`} 
                 ref={messagesContainerRef}
                 style={{ backgroundColor: isDarkMode ? '#1f1f1f' : '#fff' }}
-            >
+            >Subscribe to accepted linking
                 {sortedMessages.length === 0 ? (
                     <div className="empty-messages">
                         <Empty 

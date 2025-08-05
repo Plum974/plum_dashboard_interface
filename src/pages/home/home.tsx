@@ -19,7 +19,7 @@ export const HomePage: React.FC = () => {
   return (
     <div>
       {/* Section des compteurs */}
-      <div
+      {/* <div
         style={{
           display: "flex",
           flexDirection: "row",
@@ -35,7 +35,7 @@ export const HomePage: React.FC = () => {
         <OrderConfirmedCounter />
         <SearchCounter />
         <RealtimeClaimComponentCounter />
-      </div>
+      </div> */}
 
       {/* Section des graphiques */}
       <div
