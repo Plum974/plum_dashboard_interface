@@ -49,6 +49,9 @@ import { Provider } from "react-redux";
 import { store } from "./store/store";
 import { lazy, Suspense, useEffect } from "react";
 import { useInitialLoad } from "./hooks/useInitialLoad";
+import { useAdvancedAuth } from "./hooks/useAdvancedAuth";
+// Alternative simple :
+// import { useSimpleInactivityLogout } from "./hooks/useSimpleInactivityLogout";
 import { ApiMonitor } from "./components/ApiMonitor";
 import PerformanceMonitor from "./components/PerformanceMonitor";
 import RealtimeTest from "./components/RealtimeTest";
@@ -141,6 +144,32 @@ Pour configurer les roles pour accéder à notre dashboard, il faut aller dans l
 // Nouveau composant pour gérer le chargement initial
 const AppContent: React.FC = () => {
   useInitialLoad();
+
+  // Sécurité auth avancée : déconnexion automatique directe après inactivité
+  const authSecurity = useAdvancedAuth({
+    securityMode: "standard", // 30 min inactivité → déconnexion directe, 8h session max
+    // Ou personnalisé :
+    // inactivityMinutes: 30, // Déconnexion directe après X minutes
+    // maxSessionHours: 8,
+  });
+
+  // 🔄 ALTERNATIVE SIMPLE (décommenter pour utiliser uniquement la déconnexion par inactivité) :
+  // useSimpleInactivityLogout({ inactivityMinutes: 30 });
+  // Et commenter useAdvancedAuth ci-dessus
+
+  // Debug : voir le statut de sécurité (enlever en prod)
+  useEffect(() => {
+    const logStatus = () => {
+      const status = authSecurity.getSecurityStatus();
+      console.log("🔐 Statut sécurité auth:", status);
+    };
+
+    // Log immédiat puis toutes les 5 minutes
+    logStatus();
+    const interval = setInterval(logStatus, 5 * 60 * 1000);
+
+    return () => clearInterval(interval);
+  }, [authSecurity]);
 
   const ProtectedRoute: React.FC<{
     path: string;
