@@ -5,6 +5,7 @@ import OptimizedSearchAndOrdersChart from "../../components/searchAnalytics/Opti
 import OptimizedClaimAndOrderChart from "../../components/claimAnalytics/OptimizedClaimAndOrderChart";
 import { ColorModeContext } from "../../contexts/color-mode";
 import { DashboardDataProvider } from "../../contexts/dashboard-data/DashboardDataContext";
+import { OrderCountersSection } from "../../components/orderCounters/OrderCountersSection";
 
 export const HomePage: React.FC = () => {
   const { mode } = useContext(ColorModeContext);
@@ -12,7 +13,10 @@ export const HomePage: React.FC = () => {
   return (
     <DashboardDataProvider>
       <div>
-        {/* Section des compteurs */}
+        {/* Section des compteurs d'orders d'aujourd'hui */}
+        <OrderCountersSection />
+
+        {/* Section des compteurs (commentée) */}
         {/* <div
           style={{
             display: "flex",
