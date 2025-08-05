@@ -22,23 +22,14 @@ import { MessageChat } from "../../types/message";
 import "../../styles/chat.css";
 import "../../styles/ClaimList.css";
 import ChatUIComponent from "../chat/ChatUIComponent";
-import { RealtimeChannel } from "@supabase/supabase-js";
-import { supabaseClient } from "../../utility/supabaseClient";
 import { ColorModeContext } from "../../contexts/color-mode";
-import {
-  fetchLastMessagesForChannels,
-  fetchMessagesByChannel,
-  subscribeToMessages,
-  unsubscribeFromMessages,
-  LastMessageInfo,
-  LastMessagesMap,
-} from "../../services/chat/chatApi";
 import { sendMessageToChannel } from "../../services/chat/kiplynkChatApi";
 import { updateClaimStatus as updateClaimStatusAction } from "../../store/slices/claimSlice";
 import { useDispatch, useSelector } from "react-redux";
 import { setClaims } from "../../store/slices/claimSlice";
 import { RootState } from "../../store/store";
 import { updateClaimStatus as updateClaimStatusApi } from "../../services/claims/claimApi";
+import { useChannelMessages, useLastMessages, useGlobalMessageConnection } from "../../hooks/useMessages";
 import {
   SearchOutlined,
   FilterOutlined,
@@ -69,16 +60,7 @@ interface ClaimComponentProps {
   onBackToList?: () => void;
 }
 
-interface NewMessage {
-  message: string;
-  sender_id: string;
-  channel_id: number;
-  created_at: string;
-}
-
-interface LastMessageTimestamp {
-  [channelId: number]: string; // timestamp du dernier message
-}
+// Interfaces supprimées car gérées par Redux
 
 const getStatusColor = (status: string) => {
   switch (status) {
@@ -141,13 +123,6 @@ const ClaimComponent: React.FC<ClaimComponentProps> = ({
   const cloudflare_url_storage_images =
     import.meta.env.VITE_CLOUDFLARE_STORAGE_URL_FOR_IMAGES || "";
   const adminId = import.meta.env.VITE_CURRENT_USER_ID;
-  const [messagesState, setMessagesState] =
-    useState<MessageChat[]>(initialMessages);
-  const [lastMessagesMap, setLastMessagesMap] = useState<LastMessagesMap>({});
-  const [lastMessageTimestamps, setLastMessageTimestamps] =
-    useState<LastMessageTimestamp>({});
-  const channelRef = useRef<RealtimeChannel | null>(null);
-  const [isLoadingMessages, setIsLoadingMessages] = useState(true);
   const dispatch = useDispatch();
   const claimsFromRedux = useSelector(
     (state: RootState) => state.claims.claims,
@@ -158,22 +133,26 @@ const ClaimComponent: React.FC<ClaimComponentProps> = ({
   const [isChatVisible, setIsChatVisible] = useState<boolean>(false);
   const [claims, setClaims] = useState<any[]>(initialClaims);
 
-  // Ajouter un debounce pour éviter trop d'appels
-  const [updateTimeout, setUpdateTimeout] = useState<NodeJS.Timeout | null>(
-    null,
-  );
+  // Nouveaux hooks pour la gestion des messages via Redux
+  const { 
+    messages: channelMessages, 
+    loadChannelMessages,
+    isConnected: isMessageManagerConnected 
+  } = useChannelMessages(selectedClaim?.channel_id);
+  
+  const { 
+    lastMessagesByChannel, 
+    getLastMessageForChannel, 
+    formatLastMessageTime,
+    isConnected: isGlobalConnected 
+  } = useLastMessages();
+  
+  const { 
+    connectionStatus, 
+    error: connectionError 
+  } = useGlobalMessageConnection();
 
-  const debouncedUpdateLastMessages = () => {
-    if (updateTimeout) {
-      clearTimeout(updateTimeout);
-    }
-
-    const timeout = setTimeout(() => {
-      updateLastMessages();
-    }, 500); // Attendre 500ms avant de mettre à jour
-
-    setUpdateTimeout(timeout);
-  };
+  // Plus besoin de debounce car la gestion est centralisée dans Redux
 
   const containerStyle = {
     backgroundColor: mode === "dark" ? "#141414" : "#f8f9fa",
@@ -186,13 +165,13 @@ const ClaimComponent: React.FC<ClaimComponentProps> = ({
     avatar: claim.public_profile?.avatar || "",
   });
 
-  // Fonction pour obtenir le timestamp du dernier message d'un claim
+  // Fonction pour obtenir le timestamp du dernier message d'un claim (nouvelle version Redux)
   const getLastMessageTimestamp = (claim: any): string => {
     if (!claim.channel_id) return claim.created_at; // Fallback sur la date de création du claim
 
-    const lastMessage = lastMessagesMap[claim.channel_id];
-    if (lastMessage && lastMessage.timestamp) {
-      return lastMessage.timestamp; // Utiliser le vrai timestamp
+    const lastMessage = getLastMessageForChannel(claim.channel_id);
+    if (lastMessage) {
+      return lastMessage.created_at; // Utiliser le timestamp du dernier message
     }
 
     return claim.created_at; // Fallback
@@ -211,54 +190,12 @@ const ClaimComponent: React.FC<ClaimComponentProps> = ({
     });
   };
 
-  // Mettre à jour la fonction updateLastMessages
-  const updateLastMessages = async () => {
-    console.log("🚀 DÉBUT updateLastMessages optimisé");
-    setIsLoadingMessages(true);
-    try {
-      const channelIds = claims
-        .map((claim) => claim.channel_id)
-        .filter(Boolean)
-        .map((id) => id.toString());
-
-      console.log("📡 Requête unique pour", channelIds.length, "channels");
-
-      if (channelIds.length === 0) {
-        console.log("Aucun channel_id trouvé");
-        setLastMessagesMap({});
-        setLastMessageTimestamps({});
-        return;
-      }
-
-      // Utiliser la nouvelle API optimisée
-      const lastMessagesMap = await fetchLastMessagesForChannels(channelIds);
-      setLastMessagesMap(lastMessagesMap);
-
-      // Créer un map des timestamps pour le tri
-      const timestamps: LastMessageTimestamp = {};
-      Object.keys(lastMessagesMap).forEach((channelId) => {
-        const lastMessage = lastMessagesMap[parseInt(channelId)];
-        if (lastMessage && lastMessage.timestamp) {
-          timestamps[parseInt(channelId)] = lastMessage.timestamp; // Utiliser le vrai timestamp
-        }
-      });
-      setLastMessageTimestamps(timestamps);
-    } catch (error) {
-      console.error(
-        "Erreur lors de la mise à jour des derniers messages:",
-        error,
-      );
-    } finally {
-      setIsLoadingMessages(false);
-    }
-  };
-
+  // Plus besoin d'updateLastMessages car c'est géré par Redux automatiquement
+  
   const getMessagesByChannelId = (channelId: number) => {
     if (!channelId) return [];
-
-    return messagesState.filter(
-      (message) => Number(message.channel_id) === Number(channelId),
-    );
+    // Utiliser les messages du canal sélectionné depuis Redux
+    return selectedClaim?.channel_id === channelId ? channelMessages : [];
   };
 
   const handleSendMessageInClaimComponent = async (message: string) => {
@@ -292,80 +229,22 @@ const ClaimComponent: React.FC<ClaimComponentProps> = ({
     }
   }, [initialClaims]);
 
+  // Plus besoin de useEffect pour updateLastMessages car c'est géré automatiquement par Redux
+
   useEffect(() => {
-    // Ne mettre à jour que si les claims ont changé significativement
-    if (claims.length > 0) {
-      debouncedUpdateLastMessages();
+    // Charger les messages historiques quand une réclamation est sélectionnée
+    if (selectedClaim && selectedClaim.channel_id) {
+      console.log(`📥 Chargement des messages pour le canal ${selectedClaim.channel_id}`);
+      loadChannelMessages();
+
+      // Faire défiler vers le bas après un petit délai
+      setTimeout(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+      }, 100);
     }
-  }, [claims.length]); // Dépendance sur la longueur plutôt que sur claims
+  }, [selectedClaim, loadChannelMessages]); // Charger les messages quand selectedClaim change
 
-  useEffect(() => {
-    const loadAllMessages = async () => {
-      if (!selectedClaim || !selectedClaim.channel_id) return;
-
-      try {
-        const messages = await fetchMessagesByChannel(
-          selectedClaim.channel_id.toString(),
-        );
-        setMessagesState(messages);
-
-        setTimeout(() => {
-          messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-        }, 100);
-      } catch (error) {
-        console.error("Erreur lors du chargement des messages:", error);
-      }
-    };
-
-    if (selectedClaim) {
-      loadAllMessages();
-
-      if (selectedClaim.channel_id) {
-        // Nettoyer l'ancien canal AVANT d'en créer un nouveau
-        if (channelRef.current) {
-          console.log("🧹 Nettoyage de l'ancien canal de chat");
-          supabaseClient.removeChannel(channelRef.current);
-          channelRef.current = null;
-        }
-
-        // Utiliser le nouveau service de chat centralisé
-        const channel = subscribeToMessages(
-          selectedClaim.channel_id.toString(),
-          (newMessage: MessageChat) => {
-            setMessagesState((prevMessages) => [...prevMessages, newMessage]);
-            // Appeler updateLastMessages de manière optimisée
-            setTimeout(() => updateLastMessages(), 100);
-          },
-          setMessagesState,
-          (error: any) => {
-            console.error("❌ Erreur de connexion au canal de chat:", error);
-          },
-        );
-
-        channelRef.current = channel;
-      }
-    }
-
-    // Nettoyage du canal quand selectedClaim change
-    return () => {
-      if (selectedClaim?.channel_id) {
-        console.log("🧹 Nettoyage du canal lors du changement de claim");
-        unsubscribeFromMessages(selectedClaim.channel_id.toString());
-        channelRef.current = null;
-      }
-    };
-  }, [selectedClaim]); // Dépendance uniquement sur selectedClaim
-
-  useEffect(() => {
-    return () => {
-      // Nettoyer tous les canaux au démontage du composant
-      if (channelRef.current) {
-        console.log("�� Nettoyage du canal WebSocket au démontage");
-        supabaseClient.removeChannel(channelRef.current);
-        channelRef.current = null;
-      }
-    };
-  }, []);
+  // Plus besoin de nettoyage manuel des canaux car la gestion est centralisée
 
   // Sélectionner automatiquement la réclamation basée sur l'URL
   useEffect(() => {
@@ -646,9 +525,9 @@ const ClaimComponent: React.FC<ClaimComponentProps> = ({
           />
         </div>
 
-        {isLoadingMessages ? (
+        {connectionStatus === 'connecting' ? (
           <div style={{ padding: "1rem", textAlign: "center" }}>
-            <Spin tip="Chargement des réclamations..." />
+            <Spin tip="Connexion au système de messages..." />
           </div>
         ) : getFilteredClaims().length === 0 ? (
           <Empty
@@ -670,7 +549,11 @@ const ClaimComponent: React.FC<ClaimComponentProps> = ({
                 const isSelected =
                   selectedClaim && selectedClaim.id === claim.id;
                 const claimKey = claim.channel_id || claim.id;
-                const lastMessageInfo = lastMessagesMap[claimKey] || {
+                const lastMessage = getLastMessageForChannel(claim.channel_id);
+                const lastMessageInfo = lastMessage ? {
+                  message: lastMessage.message,
+                  time: formatLastMessageTime(lastMessage),
+                } : {
                   message: "Aucun message",
                   time: "",
                 };
