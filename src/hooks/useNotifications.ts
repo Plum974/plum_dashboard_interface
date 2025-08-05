@@ -97,13 +97,18 @@ export const useNotifications = () => {
     Object.entries(lastMessagesByChannel).forEach(([channelId, message]) => {
       const channelIdNum = parseInt(channelId);
 
-      // Vérifier si c'est un canal de réclamation
-      if (claimChannels.includes(channelIdNum)) {
-        const messageTimestamp = new Date(message.created_at).getTime();
+      // Vérifier si c'est un canal de réclamation et que le message existe
+      if (
+        claimChannels.includes(channelIdNum) &&
+        message &&
+        typeof message === "object"
+      ) {
+        const messageAsChat = message as MessageChat;
+        const messageTimestamp = new Date(messageAsChat.created_at).getTime();
 
         if (messageTimestamp > latestTimestamp) {
           latestTimestamp = messageTimestamp;
-          latestMessage = message;
+          latestMessage = messageAsChat;
         }
       }
     });
@@ -111,8 +116,12 @@ export const useNotifications = () => {
     // Si on a un nouveau message qui n'a pas été traité
     if (
       latestMessage &&
-      latestMessage.sender_id !== adminId &&
-      (!lastProcessedMessageId || latestMessage.id > lastProcessedMessageId)
+      typeof latestMessage === "object" &&
+      "sender_id" in latestMessage &&
+      "id" in latestMessage &&
+      (latestMessage as MessageChat).sender_id !== adminId &&
+      (!lastProcessedMessageId ||
+        (latestMessage as MessageChat).id > lastProcessedMessageId)
     ) {
       console.log(
         "🔔 Nouveau message détecté pour notification:",
@@ -120,13 +129,21 @@ export const useNotifications = () => {
       );
 
       // Marquer ce message comme traité
-      setLastProcessedMessageId(latestMessage.id);
+      setLastProcessedMessageId((latestMessage as MessageChat).id);
 
       // Ajouter le nouveau message à l'historique s'il n'y est pas déjà
-      setNotificationHistory((prev) => {
-        const exists = prev.some((msg) => msg.id === latestMessage.id);
+      setNotificationHistory((prev: MessageChat[]) => {
+        if (
+          !latestMessage ||
+          typeof latestMessage !== "object" ||
+          !("id" in latestMessage)
+        )
+          return prev;
+        const exists = prev.some(
+          (msg) => msg.id === (latestMessage as MessageChat).id,
+        );
         if (!exists) {
-          return [latestMessage, ...prev];
+          return [latestMessage as MessageChat, ...prev];
         }
         return prev;
       });
@@ -135,7 +152,7 @@ export const useNotifications = () => {
       setUnreadCount((prev) => prev + 1);
 
       // Charger les infos de l'expéditeur et afficher la notification
-      showNotification(latestMessage);
+      showNotification(latestMessage as MessageChat);
     }
   }, [lastMessagesByChannel, claimChannels, adminId, lastProcessedMessageId]);
 
