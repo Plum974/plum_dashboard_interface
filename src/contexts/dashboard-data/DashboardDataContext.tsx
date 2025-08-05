@@ -19,6 +19,7 @@ interface DashboardData {
   endDate: string;
   isLoading: boolean;
   error: string | null;
+  loadingProgress?: string; // Pour afficher le progrès de la pagination
 }
 
 interface DashboardDataContextType {
@@ -46,6 +47,7 @@ export const DashboardDataProvider: React.FC<DashboardDataProviderProps> = ({
     endDate: "",
     isLoading: false,
     error: null,
+    loadingProgress: undefined,
   });
 
   // Initialiser avec une période d'un mois par défaut
@@ -65,7 +67,12 @@ export const DashboardDataProvider: React.FC<DashboardDataProviderProps> = ({
   }, []);
 
   const fetchAllData = async (startDate: string, endDate: string) => {
-    setData((prev) => ({ ...prev, isLoading: true, error: null }));
+    setData((prev) => ({ 
+      ...prev, 
+      isLoading: true, 
+      error: null, 
+      loadingProgress: "Initialisation..." 
+    }));
 
     try {
       console.log(
@@ -74,24 +81,41 @@ export const DashboardDataProvider: React.FC<DashboardDataProviderProps> = ({
         endDate,
       );
 
-      // Faire tous les appels en parallèle pour optimiser les performances
-      const [ordersData, claimsData, searchesData] = await Promise.all([
-        fetchAllOrderInPeriodForAnalytics(startDate, endDate).catch((err) => {
-          console.error("Erreur lors de la récupération des commandes:", err);
-          return [];
-        }),
-        fetchAllClaimInPeriod(startDate, endDate).catch((err) => {
-          console.error(
-            "Erreur lors de la récupération des réclamations:",
-            err,
-          );
-          return [];
-        }),
-        fetchSearchAnalyticsByPeriod(startDate, endDate).catch((err) => {
-          console.error("Erreur lors de la récupération des recherches:", err);
-          return [];
-        }),
-      ]);
+      // Mettre à jour le progrès
+      setData((prev) => ({
+        ...prev,
+        loadingProgress: "Récupération des commandes (peut prendre du temps si beaucoup de données)...",
+      }));
+
+      // Récupérer les commandes en premier (avec pagination)
+      const ordersData = await fetchAllOrderInPeriodForAnalytics(startDate, endDate).catch((err) => {
+        console.error("Erreur lors de la récupération des commandes:", err);
+        return [];
+      });
+
+      // Mettre à jour le progrès
+      setData((prev) => ({
+        ...prev,
+        loadingProgress: "Récupération des réclamations...",
+      }));
+
+      // Récupérer les réclamations
+      const claimsData = await fetchAllClaimInPeriod(startDate, endDate).catch((err) => {
+        console.error("Erreur lors de la récupération des réclamations:", err);
+        return [];
+      });
+
+      // Mettre à jour le progrès
+      setData((prev) => ({
+        ...prev,
+        loadingProgress: "Récupération des recherches...",
+      }));
+
+      // Récupérer les recherches
+      const searchesData = await fetchSearchAnalyticsByPeriod(startDate, endDate).catch((err) => {
+        console.error("Erreur lors de la récupération des recherches:", err);
+        return [];
+      });
 
       setData((prev) => ({
         ...prev,
@@ -101,6 +125,7 @@ export const DashboardDataProvider: React.FC<DashboardDataProviderProps> = ({
         startDate,
         endDate,
         isLoading: false,
+        loadingProgress: undefined,
       }));
 
       console.log("✅ Données centralisées récupérées:", {
@@ -108,12 +133,19 @@ export const DashboardDataProvider: React.FC<DashboardDataProviderProps> = ({
         claims: claimsData.length,
         searches: searchesData.length,
       });
+
+      // Alerte si on a atteint la limite potentielle
+      if (ordersData.length >= 50000) {
+        console.warn("⚠️ Limite de sécurité atteinte pour les commandes. Il pourrait y avoir plus de données.");
+      }
+
     } catch (error) {
       console.error("Erreur lors de la récupération des données:", error);
       setData((prev) => ({
         ...prev,
         error: "Erreur lors de la récupération des données",
         isLoading: false,
+        loadingProgress: undefined,
       }));
     }
   };

@@ -61,39 +61,70 @@ const validateCache = (startDate: string, endDate: string): boolean => {
 };
 
 /**
- * Récupère les commandes depuis Supabase pour une période donnée.
+ * Récupère les commandes depuis Supabase pour une période donnée avec pagination complète.
  */
 const fetchOrdersFromSupabase = async (startDate: string, endDate: string): Promise<Order[]> => {
   let allData: Order[] = [];
   let currentPage = 0;
+  let hasMoreData = true;
+  const maxPages = 50; // Sécurité pour éviter les boucles infinies (50 * 1000 = 50k commandes max)
 
-  while (true) {
+  console.log(`🔍 Début de la récupération paginée des commandes pour ${startDate} à ${endDate}`);
+
+  while (hasMoreData && currentPage < maxPages) {
     try {
-      const { data, error } = await supabaseClient
+      const startRange = currentPage * PAGE_SIZE;
+      const endRange = (currentPage + 1) * PAGE_SIZE - 1;
+      
+      console.log(`📄 Récupération de la page ${currentPage + 1} (range: ${startRange}-${endRange})`);
+
+      const { data, error, count } = await supabaseClient
         .from('order')
-        .select('*')
+        .select('*', { count: 'exact' })
         .gte('created_at', `${startDate}T00:00:00`)
         .lte('created_at', `${endDate}T23:59:59`)
         .order('created_at', { ascending: false })
-        .range(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE - 1);
+        .range(startRange, endRange);
 
       if (error) {
-        console.error("Erreur lors de la récupération des commandes:", error);
+        console.error("❌ Erreur lors de la récupération des commandes:", error);
         throw error;
       }
 
-      if (!data || data.length === 0) break;
+      // Log pour la première page pour connaître le total
+      if (currentPage === 0 && count !== null) {
+        console.log(`📊 Total estimé de commandes dans la période: ${count}`);
+        console.log(`📈 Nombre de pages attendues: ${Math.ceil(count / PAGE_SIZE)}`);
+      }
 
+      if (!data) {
+        console.log(`⚠️ Aucune donnée retournée pour la page ${currentPage + 1}`);
+        break;
+      }
+
+      console.log(`✅ Page ${currentPage + 1} récupérée: ${data.length} résultats`);
+      
+      // Ajouter les données à notre collection
       allData = [...allData, ...data];
       currentPage++;
 
-      console.log(`Page ${currentPage} récupérée : ${data.length} résultats`);
+      // Conditions d'arrêt
+      if (data.length < PAGE_SIZE) {
+        console.log(`🏁 Fin de pagination: dernière page avec ${data.length} résultats`);
+        hasMoreData = false;
+      }
+
     } catch (error) {
-      console.error("Erreur lors de la récupération des commandes:", error);
+      console.error(`❌ Erreur lors de la récupération de la page ${currentPage + 1}:`, error);
       throw error;
     }
   }
 
+  if (currentPage >= maxPages) {
+    console.warn(`⚠️ Limite de sécurité atteinte (${maxPages} pages). Il pourrait y avoir plus de données.`);
+  }
+
+  console.log(`🎉 Récupération terminée: ${allData.length} commandes sur ${currentPage} pages`);
   return allData;
 };
 

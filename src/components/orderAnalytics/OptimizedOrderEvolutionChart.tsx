@@ -120,7 +120,19 @@ const OptimizedOrderEvolutionChart: React.FC = () => {
         style={{ marginBottom: "10px" }}
       />
       {data.isLoading ? (
-        <Spin tip="Loading..." />
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+          <Spin tip={data.loadingProgress || "Chargement..."} />
+          {data.loadingProgress && (
+            <p style={{ 
+              marginTop: 10, 
+              fontSize: "12px", 
+              color: mode === "dark" ? "#888" : "#666",
+              textAlign: "center"
+            }}>
+              {data.loadingProgress}
+            </p>
+          )}
+        </div>
       ) : data.error ? (
         <div style={{ color: "red", textAlign: "center" }}>
           {data.error}

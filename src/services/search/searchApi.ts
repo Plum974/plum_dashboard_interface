@@ -88,31 +88,78 @@ const fetchDataForPeriod = async (
   return data || [];
 };
 
-// Fonction pour récupérer uniquement les dates pour une période
+// Fonction pour récupérer uniquement les dates pour une période avec pagination complète
 const fetchDatesForPeriod = async (
   startDate: string,
   endDate: string,
-  limit: number = PAGE_SIZE // Limite le nombre de résultats
+  maxLimit: number = 50000 // Limite maximale de sécurité
 ): Promise<Date[]> => {
-  const { data, error } = await supabaseClient
-    .from('archive_search_results')
-    .select('created_at')
-    .gte('created_at', `${startDate}T00:00:00`)
-    .lte('created_at', `${endDate}T23:59:59`)
-    .order('created_at', { ascending: true })
-    .limit(limit); // Limite le nombre de résultats récupérés
+  let allDates: Date[] = [];
+  let currentPage = 0;
+  let hasMoreData = true;
+  const pageSize = 1000; // Taille de page Supabase
+  const maxPages = Math.ceil(maxLimit / pageSize);
 
-  if (error) {
-    console.error("Erreur lors de la récupération des dates:", error);
-    throw error;
+  console.log(`🔍 Début de récupération paginée des recherches pour ${startDate} à ${endDate}`);
+
+  while (hasMoreData && currentPage < maxPages) {
+    try {
+      const startRange = currentPage * pageSize;
+      const endRange = (currentPage + 1) * pageSize - 1;
+      
+      console.log(`📄 Récupération page ${currentPage + 1} des recherches (range: ${startRange}-${endRange})`);
+
+      const { data, error, count } = await supabaseClient
+        .from('archive_search_results')
+        .select('created_at', { count: 'exact' })
+        .gte('created_at', `${startDate}T00:00:00`)
+        .lte('created_at', `${endDate}T23:59:59`)
+        .order('created_at', { ascending: true })
+        .range(startRange, endRange);
+
+      if (error) {
+        console.error("❌ Erreur lors de la récupération des dates:", error);
+        throw error;
+      }
+
+      // Log pour la première page
+      if (currentPage === 0 && count !== null) {
+        console.log(`📊 Total estimé de recherches dans la période: ${count}`);
+        console.log(`📈 Nombre de pages attendues: ${Math.ceil(count / pageSize)}`);
+      }
+
+      if (!data || data.length === 0) {
+        console.log(`⚠️ Aucune donnée pour la page ${currentPage + 1}`);
+        break;
+      }
+
+      const validDates = data
+        .map(item => new Date(item.created_at))
+        .filter(date => !isNaN(date.getTime()));
+
+      allDates = [...allDates, ...validDates];
+      currentPage++;
+
+      console.log(`✅ Page ${currentPage} récupérée: ${validDates.length} recherches valides`);
+
+      // Condition d'arrêt
+      if (data.length < pageSize) {
+        console.log(`🏁 Fin de pagination recherches: dernière page avec ${data.length} résultats`);
+        hasMoreData = false;
+      }
+
+    } catch (error) {
+      console.error(`❌ Erreur lors de la récupération de la page ${currentPage + 1}:`, error);
+      throw error;
+    }
   }
 
-  const validDates = (data || [])
-    .map(item => new Date(item.created_at))
-    .filter(date => !isNaN(date.getTime()));
+  if (currentPage >= maxPages) {
+    console.warn(`⚠️ Limite de sécurité atteinte pour les recherches (${maxPages} pages)`);
+  }
 
-  console.log(`Dates récupérées : ${validDates.length} résultats`);
-  return validDates;
+  console.log(`🎉 Récupération recherches terminée: ${allDates.length} recherches sur ${currentPage} pages`);
+  return allDates;
 };
 
 // Fonction pour récupérer toutes les données (avec une limite)
@@ -185,13 +232,12 @@ export const fetchAllSearch = async (
 
 export const fetchSearchAnalyticsByPeriod = async (
   startDate: string,
-  endDate: string,
-  limit: number = PAGE_SIZE // Limite le nombre de résultats
+  endDate: string
 ): Promise<Date[]> => {
   console.log("Appel de fetchSearchAnalyticsByPeriod");
 
   if (validateCache(startDate, endDate) && searchAnalyticsCache) {
-    console.log('Utilisation du cache pour les dates');
+    console.log('Utilisation du cache pour les recherches');
     return searchAnalyticsCache.data
       .filter(item => {
         const itemDate = new Date(item.created_at!);
@@ -199,9 +245,9 @@ export const fetchSearchAnalyticsByPeriod = async (
                itemDate <= new Date(`${endDate}T23:59:59`);
       })
       .map(item => new Date(item.created_at!))
-      .filter(date => !isNaN(date.getTime()))
-      .slice(0, limit); // Limite les résultats retournés
+      .filter(date => !isNaN(date.getTime()));
   }
 
-  return fetchDatesForPeriod(startDate, endDate, limit);
+  // Récupérer toutes les données avec pagination (pas de limite artificielle)
+  return fetchDatesForPeriod(startDate, endDate);
 };
