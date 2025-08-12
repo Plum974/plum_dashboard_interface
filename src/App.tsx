@@ -433,8 +433,8 @@ const AppContent: React.FC = () => {
                 type="login"
                 formProps={{
                   initialValues: {
-                    email: "ain.raph01@gmail.com",
-                    password: "tototo",
+                    email: "",
+                    password: "",
                   },
                 }}
               />
@@ -459,7 +459,7 @@ const AppContent: React.FC = () => {
       {/* <ApiMonitor /> */}
       {/* <PerformanceMonitor /> */}
       {/* <SupabasePerformanceMonitor /> */}
-      <RealtimeTest />
+      {/* <RealtimeTest /> */}
     </Refine>
   );
 };
