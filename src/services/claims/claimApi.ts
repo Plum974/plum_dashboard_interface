@@ -149,22 +149,57 @@ export const fetchAllClaimInPeriod = async (
 
 // Fonction pour mettre à jour le statut d'une réclamation
 export const updateClaimStatus = async (
-  claim_id: bigint,
+  claim_id: number | bigint,
   newStatus: string,
 ): Promise<void> => {
   try {
-    const { error } = await supabaseClient
+    console.log("🔧 Mise à jour du statut - Debug:");
+    console.log("newStatus:", newStatus);
+    console.log("claim_id (BigInt):", claim_id);
+    console.log("claim_id (string):", claim_id.toString());
+    console.log("claim_id (number):", Number(claim_id));
+
+    // Convertir en string pour Supabase (gère number et bigint)
+    const claimIdString = claim_id.toString();
+
+    const { data, error } = await supabaseClient
       .from("claim")
-      .update({ status: newStatus })
-      .eq("claim_id", claim_id);
+      .update({
+        status: newStatus,
+        updated_at: new Date().toISOString(),
+        // Si le statut est RESOLVED, on met aussi closed_at
+        ...(newStatus === "RESOLVED" && {
+          closed_at: new Date().toISOString(),
+        }),
+      })
+      .eq("claim_id", claimIdString)
+      .select(); // Ajouter .select() pour voir ce qui est retourné
 
     if (error) {
-      console.error("Erreur Supabase:", error);
+      console.error("❌ Erreur Supabase:", error);
       throw error;
+    }
+
+    console.log("✅ Mise à jour réussie. Données retournées:", data);
+
+    // Test de vérification - récupérer la réclamation pour confirmer la mise à jour
+    const { data: verifyData, error: verifyError } = await supabaseClient
+      .from("claim")
+      .select("claim_id, status, updated_at")
+      .eq("claim_id", claimIdString)
+      .single();
+
+    if (verifyError) {
+      console.error("❌ Erreur lors de la vérification:", verifyError);
+    } else {
+      console.log(
+        "✅ Vérification - Réclamation après mise à jour:",
+        verifyData,
+      );
     }
   } catch (error) {
     console.error(
-      `Erreur lors de la mise à jour du statut de la réclamation ${claim_id}:`,
+      `❌ Erreur lors de la mise à jour du statut de la réclamation ${claim_id}:`,
       error,
     );
     throw error;
@@ -243,6 +278,37 @@ export const fetchClaimsWithMessages = async () => {
   } catch (error) {
     console.error("Erreur dans fetchClaimsWithMessages:", error);
     throw error;
+  }
+};
+
+// Version optimisée pour Claim Management: récupérer uniquement les claims (sans messages)
+export const fetchClaimsBasic = async () => {
+  try {
+    const { data: claims, error } = await supabaseClient
+      .from("claim")
+      .select(
+        `
+          claim_id,
+          claim_slug,
+          order_id,
+          user_id,
+          channel_id,
+          status,
+          created_at,
+          public_profile (
+            first_name,
+            last_name,
+            avatar
+          )
+        `,
+      )
+      .order("created_at", { ascending: false });
+
+    if (error) throw error;
+    return claims || [];
+  } catch (error) {
+    console.error("Erreur dans fetchClaimsBasic:", error);
+    throw error as any;
   }
 };
 

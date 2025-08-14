@@ -80,7 +80,11 @@ const fetchOrdersFromSupabase = async (startDate: string, endDate: string): Prom
 
       const { data, error, count } = await supabaseClient
         .from('order')
-        .select('*', { count: 'exact' })
+        .select(`
+          *, 
+          fliiinker_profile(*, public_profile(*)),
+          customer:public_profile!customer_id(*)
+        `, { count: 'exact' })
         .gte('created_at', `${startDate}T00:00:00`)
         .lte('created_at', `${endDate}T23:59:59`)
         .order('created_at', { ascending: false })

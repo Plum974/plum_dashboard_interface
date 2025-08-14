@@ -104,6 +104,11 @@ const ClaimListLazy = lazy(() =>
     (module) => ({ default: ClaimList }),
   ),
 );
+const ClaimManagementPageLazy = lazy(() =>
+  import(
+    /* webpackChunkName: "claim-management" */ "./pages/claim-management/ClaimManagementPage"
+  ).then((module) => ({ default: module.default })),
+);
 const WeeklyCalendarPageLazy = lazy(() =>
   import(
     /* webpackChunkName: "calendar" */ "./pages/calendar/calendarPage"
@@ -266,6 +271,14 @@ const AppContent: React.FC = () => {
           },
         },
         {
+          name: "claim-management",
+          list: "/claim-management",
+          meta: {
+            label: "Gestion de Réclamation",
+            icon: <SolutionOutlined />,
+          },
+        },
+        {
           name: "calendar",
           list: "/calendar",
           meta: {
@@ -375,6 +388,28 @@ const AppContent: React.FC = () => {
                 <ProtectedRoute path="/claim/:claimId">
                   <Suspense fallback={<Spin tip="Chargement..." />}>
                     <ClaimListLazy />
+                  </Suspense>
+                </ProtectedRoute>
+              }
+            />
+          </Route>
+          <Route path="/claim-management">
+            <Route
+              index
+              element={
+                <ProtectedRoute path="/claim-management">
+                  <Suspense fallback={<Spin tip="Chargement..." />}>
+                    <ClaimManagementPageLazy />
+                  </Suspense>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path=":claimId"
+              element={
+                <ProtectedRoute path="/claim-management/:claimId">
+                  <Suspense fallback={<Spin tip="Chargement..." />}>
+                    <ClaimManagementPageLazy />
                   </Suspense>
                 </ProtectedRoute>
               }

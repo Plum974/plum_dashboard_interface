@@ -338,3 +338,28 @@ export const fetchLastMessagesForChannels = async (
     throw error;
   }
 };
+
+// Récupérer le dernier message pour un channel spécifique (requête ciblée)
+export const fetchLastMessageForChannel = async (
+  channelId: string,
+): Promise<MessageChat | null> => {
+  try {
+    const { data, error } = await supabaseClient
+      .from("message_chat")
+      .select("*")
+      .eq("channel_id", channelId)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error) {
+      console.error("❌ Erreur lors de la récupération du dernier message:", error);
+      throw error;
+    }
+
+    return (data as unknown as MessageChat) || null;
+  } catch (error) {
+    console.error("💥 Erreur dans fetchLastMessageForChannel:", error);
+    throw error as any;
+  }
+};

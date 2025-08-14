@@ -140,7 +140,7 @@ export const CustomerDetails: React.FC<CustomerDetailsProps> = ({ publicProfile,
             {/* Avatar */}
             <div style={{ textAlign: "center", marginBottom: "30px" }}>
                 {publicProfile.avatar && publicProfile.avatar.length > 0 ? (
-                    <Avatar size={200} src={supabase_url_storage_images + publicProfile.avatar} style={{ border: "4px solid #f0f0f0" }} />
+                    <Avatar size={200} src={supabase_url_storage_images + "/" + publicProfile.avatar} style={{ border: "4px solid #f0f0f0" }} />
                 ) : (
                     <Avatar
                         size={200}
