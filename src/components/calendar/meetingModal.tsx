@@ -1,5 +1,24 @@
-import React, { useContext, useEffect, useState, useRef, useCallback } from "react";
-import { Modal, Typography, Avatar, Tag, Divider, Spin, Space, Row, Col, Card, Button, message } from "antd";
+import React, {
+  useContext,
+  useEffect,
+  useState,
+  useRef,
+  useCallback,
+} from "react";
+import {
+  Modal,
+  Typography,
+  Avatar,
+  Tag,
+  Divider,
+  Spin,
+  Space,
+  Row,
+  Col,
+  Card,
+  Button,
+  message,
+} from "antd";
 import {
   ClockCircleOutlined,
   EnvironmentOutlined,
@@ -17,7 +36,11 @@ import {
   CheckCircleOutlined,
   ThunderboltOutlined,
 } from "@ant-design/icons";
-import { MeetingWithProfiles, fetchFliiinkerCompleteProfile, validateFliiinkerProfileAndServices } from "../../services/meeting/meetingService";
+import {
+  MeetingWithProfiles,
+  fetchFliiinkerCompleteProfile,
+  validateFliiinkerProfileAndServices,
+} from "../../services/meeting/meetingService";
 import dayjs from "dayjs";
 import { ColorModeContext } from "../../contexts/color-mode";
 import { FliiinkerCompleteProfile } from "../../types/FliiinkerCompleteProfile";
@@ -25,8 +48,11 @@ import type { Address } from "../../types/FliiinkerCompleteProfile";
 import "../../styles/meetingModal.css";
 
 const { Title, Text, Paragraph } = Typography;
+const worker_url_secure_access = import.meta.env.VITE_URL_WORKER_SECURE_ACCESS;
+const front_image = import.meta.env.VITE_ADMIN_DATA_IMAGES_FRONT_IMAGE;
+const back_image = import.meta.env.VITE_ADMIN_DATA_IMAGES_BACK_IMAGE;
 
-// Composant d'image administrative qui gère l'en-tête d'autorisation
+// Composant d'image administrative - Version simple qui fonctionne
 const AdminImage: React.FC<{
   imagePath: string | undefined;
   alt: string;
@@ -45,29 +71,35 @@ const AdminImage: React.FC<{
     }
 
     const fetchImage = async () => {
-      console.log("✈️✈️✈️✈️✈️✈️✈️✈️✈️✈️✈️✈️✈️✈️✈️✈️✈️✈️✈️✈️✈️")
-      console.log(imagePath)
-      console.log("✈️✈️✈️✈️✈️✈️✈️✈️✈️✈️✈️✈️✈️✈️✈️✈️✈️✈️✈️✈️✈️")
       try {
         setLoading(true);
-        const response = await fetch(`https://administrative-image-access.fliiinkapp.workers.dev/${imagePath}`, {
+        const fullUrl = `${worker_url_secure_access}/${imagePath}`;
+        console.log("🔍 URL complète:", fullUrl);
+        console.log("🔍 Token:", import.meta.env.VITE_ADMIN_DATA_IMAGES_SECRET_KEY ? "✅ Défini" : "❌ Non défini");
+        
+        // Exactement comme dans Postman
+        const response = await fetch(fullUrl, {
+          method: 'GET',
           headers: {
-            Authorization: `Bearer ${import.meta.env.VITE_ADMIN_DATA_IMAGES_SECRET_KEY}`
-          }
+            'Authorization': `Bearer ${import.meta.env.VITE_ADMIN_DATA_IMAGES_SECRET_KEY}`,
+          },
         });
 
+        console.log("📡 Response status:", response.status);
+        console.log("📡 Response headers:", [...response.headers.entries()]);
+
         if (!response.ok) {
-          throw new Error(`Erreur HTTP: ${response.status}`);
-        }else{
-          console.log("Image administrative chargée avec succès:", imagePath);
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
 
         const blob = await response.blob();
         const objectUrl = URL.createObjectURL(blob);
         setImageUrl(objectUrl);
         setLoading(false);
+        console.log("✅ Image chargée avec succès");
+
       } catch (err) {
-        console.error(`Erreur de chargement de l'image: ${imagePath}`, err);
+        console.error(`❌ Erreur de chargement:`, err);
         setError(true);
         setLoading(false);
       }
@@ -75,7 +107,6 @@ const AdminImage: React.FC<{
 
     fetchImage();
 
-    // Nettoyage de l'URL de l'objet lors du démontage
     return () => {
       if (imageUrl) {
         URL.revokeObjectURL(imageUrl);
@@ -84,21 +115,35 @@ const AdminImage: React.FC<{
   }, [imagePath]);
 
   if (loading) {
-    return <Spin style={{ ...style, display: "flex", justifyContent: "center", alignItems: "center" }} />;
+    return (
+      <Spin
+        style={{
+          ...style,
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+        }}
+      />
+    );
   }
 
   if (error || !imageUrl) {
-    return <div style={{...style, background: "#f5f5f5", display: "flex", justifyContent: "center", alignItems: "center"}}><Text type="secondary">Image non disponible</Text></div>;
+    return (
+      <div
+        style={{
+          ...style,
+          background: "#f5f5f5",
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+        }}
+      >
+        <Text type="secondary">Image non disponible</Text>
+      </div>
+    );
   }
 
-  return (
-    <img
-      src={imageUrl}
-      alt={alt}
-      style={style}
-      onClick={onClick}
-    />
-  );
+  return <img src={imageUrl} alt={alt} style={style} onClick={onClick} />;
 };
 
 interface MeetingModalProps {
@@ -117,9 +162,16 @@ declare global {
   }
 }
 
-const MeetingModal: React.FC<MeetingModalProps> = ({ isVisible, meeting, loading: initialLoading, onClose, meetingId }) => {
+const MeetingModal: React.FC<MeetingModalProps> = ({
+  isVisible,
+  meeting,
+  loading: initialLoading,
+  onClose,
+  meetingId,
+}) => {
   const { mode } = useContext(ColorModeContext);
-  const [fliiinkerProfile, setFliiinkerProfile] = useState<FliiinkerCompleteProfile | null>(null);
+  const [fliiinkerProfile, setFliiinkerProfile] =
+    useState<FliiinkerCompleteProfile | null>(null);
   const [loading, setLoading] = useState(initialLoading);
   const [mapLoaded, setMapLoaded] = useState(false);
   const mapRef = useRef<google.maps.Map | null>(null);
@@ -163,14 +215,19 @@ const MeetingModal: React.FC<MeetingModalProps> = ({ isVisible, meeting, loading
       console.log("Données du profil complet:", fliiinkerProfile);
       console.log(
         "Données administratives:",
-        fliiinkerProfile.fliiinker_profile?.administrative_data || fliiinkerProfile.administrative_data
+        fliiinkerProfile.fliiinker_profile?.administrative_data ||
+          fliiinkerProfile.administrative_data,
       );
       console.log("Services:", fliiinkerProfile.services);
       console.log(
         "Meeting:",
-        fliiinkerProfile.fliiinker_profile?.fliiinker_meeting || fliiinkerProfile.meeting
+        fliiinkerProfile.fliiinker_profile?.fliiinker_meeting ||
+          fliiinkerProfile.meeting,
       );
-      console.log("📸📸📸 Images administratives:", fliiinkerProfile.administrative_images);
+      console.log(
+        "📸📸📸 Images administratives:",
+        fliiinkerProfile.administrative_images,
+      );
     }
   }, [fliiinkerProfile]);
 
@@ -196,38 +253,51 @@ const MeetingModal: React.FC<MeetingModalProps> = ({ isVisible, meeting, loading
   }, []);
 
   // Fonction pour initialiser la carte
-  const initializeMap = useCallback((addresses: Address[]) => {
-    if (!mapLoaded || !addresses.length || !mapContainerRef.current) return;
+  const initializeMap = useCallback(
+    (addresses: Address[]) => {
+      if (!mapLoaded || !addresses.length || !mapContainerRef.current) return;
 
-    try {
-      const defaultAddress = addresses[0];
-      if (!defaultAddress?.latitude || !defaultAddress?.longitude) return;
+      try {
+        const defaultAddress = addresses[0];
+        if (!defaultAddress?.latitude || !defaultAddress?.longitude) return;
 
-      const mapOptions = {
-        center: { lat: defaultAddress.latitude, lng: defaultAddress.longitude },
-        zoom: 15,
-        mapTypeId: "roadmap",
-      };
+        const mapOptions = {
+          center: {
+            lat: defaultAddress.latitude,
+            lng: defaultAddress.longitude,
+          },
+          zoom: 15,
+          mapTypeId: "roadmap",
+        };
 
-      const map = new window.google.maps.Map(mapContainerRef.current, mapOptions);
+        const map = new window.google.maps.Map(
+          mapContainerRef.current,
+          mapOptions,
+        );
 
-      addresses.forEach((address) => {
-        if (address.latitude && address.longitude) {
-          new window.google.maps.Marker({
-            map,
-            position: { lat: address.latitude, lng: address.longitude },
-            title: address.name || "Adresse",
-          });
-        }
-      });
-    } catch (error) {
-      console.error("Erreur carte:", error);
-    }
-  }, [mapLoaded]);
+        addresses.forEach((address) => {
+          if (address.latitude && address.longitude) {
+            new window.google.maps.Marker({
+              map,
+              position: { lat: address.latitude, lng: address.longitude },
+              title: address.name || "Adresse",
+            });
+          }
+        });
+      } catch (error) {
+        console.error("Erreur carte:", error);
+      }
+    },
+    [mapLoaded],
+  );
 
   // Charger l'API Google Maps quand le modal est visible
   useEffect(() => {
-    if (isVisible && profileData?.addresses && profileData.addresses.length > 0) {
+    if (
+      isVisible &&
+      profileData?.addresses &&
+      profileData.addresses.length > 0
+    ) {
       console.log("Tentative de chargement de la carte");
       loadGoogleMaps();
     }
@@ -235,7 +305,12 @@ const MeetingModal: React.FC<MeetingModalProps> = ({ isVisible, meeting, loading
 
   // Initialiser la carte quand l'API est chargée
   useEffect(() => {
-    if (mapLoaded && profileData?.addresses && profileData.addresses.length > 0 && mapContainerRef.current) {
+    if (
+      mapLoaded &&
+      profileData?.addresses &&
+      profileData.addresses.length > 0 &&
+      mapContainerRef.current
+    ) {
       console.log("Initialisation de la carte");
       initializeMap(profileData.addresses);
     }
@@ -317,10 +392,16 @@ const MeetingModal: React.FC<MeetingModalProps> = ({ isVisible, meeting, loading
   // Fonction pour ouvrir l'image dans la modale
   const handleImageClick = (imageUrl: string) => {
     // Si c'est une image administrative, garder l'URL originale
-    if (imageUrl.startsWith("https://administrative-image-access.fliiinkapp.workers.dev")) {
+    if (
+      imageUrl.startsWith(
+        "https://administrative-image-access.fliiinkapp.workers.dev",
+      )
+    ) {
       setSelectedImage(imageUrl);
     } else {
-      setSelectedImage(`${import.meta.env.VITE_SUPABASE_STORAGE_URL_FOR_IMAGES}/${imageUrl}`);
+      setSelectedImage(
+        `${import.meta.env.VITE_SUPABASE_STORAGE_URL_FOR_IMAGES}/${imageUrl}`,
+      );
     }
   };
 
@@ -332,25 +413,31 @@ const MeetingModal: React.FC<MeetingModalProps> = ({ isVisible, meeting, loading
   // Fonction pour afficher l'image administrative dans la modale
   const handleAdminImageClick = (imagePath: string) => {
     if (!imagePath) return;
-    
+
     // Charger l'image avec l'autorisation et l'afficher
-    fetch(`https://administrative-image-access.fliiinkapp.workers.dev/${imagePath}`, {
-      headers: {
-        Authorization: `Bearer ${import.meta.env.VITE_ADMIN_DATA_IMAGES_SECRET_KEY}`
-      }
-    })
-    .then(response => {
-      if (!response.ok) throw new Error(`Erreur HTTP: ${response.status}`);
-      return response.blob();
-    })
-    .then(blob => {
-      const objectUrl = URL.createObjectURL(blob);
-      setSelectedImage(objectUrl);
-    })
-    .catch(error => {
-      console.error(`Erreur lors du chargement de l'image administrative: ${imagePath}`, error);
-      messageApi.error(`Impossible de charger l'image: ${error.message}`);
-    });
+    fetch(
+      `https://administrative-image-access.fliiinkapp.workers.dev/${imagePath}`,
+      {
+        headers: {
+          Authorization: `Bearer ${import.meta.env.VITE_ADMIN_DATA_IMAGES_SECRET_KEY}`,
+        },
+      },
+    )
+      .then((response) => {
+        if (!response.ok) throw new Error(`Erreur HTTP: ${response.status}`);
+        return response.blob();
+      })
+      .then((blob) => {
+        const objectUrl = URL.createObjectURL(blob);
+        setSelectedImage(objectUrl);
+      })
+      .catch((error) => {
+        console.error(
+          `Erreur lors du chargement de l'image administrative: ${imagePath}`,
+          error,
+        );
+        messageApi.error(`Impossible de charger l'image: ${error.message}`);
+      });
   };
 
   if (loading) {
@@ -364,7 +451,9 @@ const MeetingModal: React.FC<MeetingModalProps> = ({ isVisible, meeting, loading
         centered
         width={800}
       >
-        <div style={{ display: "flex", justifyContent: "center", padding: "40px" }}>
+        <div
+          style={{ display: "flex", justifyContent: "center", padding: "40px" }}
+        >
           <Spin size="large" />
         </div>
       </Modal>
@@ -375,13 +464,22 @@ const MeetingModal: React.FC<MeetingModalProps> = ({ isVisible, meeting, loading
     return null;
   }
 
-  const meetingData = profileData.fliiinker_profile?.fliiinker_meeting || profileData.meeting || meeting?.meeting;
-  const meetingDate = meetingData?.date_to_call ? dayjs(meetingData.date_to_call) : null;
+  const meetingData =
+    profileData.fliiinker_profile?.fliiinker_meeting ||
+    profileData.meeting ||
+    meeting?.meeting;
+  const meetingDate = meetingData?.date_to_call
+    ? dayjs(meetingData.date_to_call)
+    : null;
 
-  const adminData = profileData.fliiinker_profile?.administrative_data || profileData.administrative_data;
-  const supaPowas = profileData.fliiinker_profile?.supa_powa || profileData.supa_powa || [];
+  const adminData =
+    profileData.fliiinker_profile?.administrative_data ||
+    profileData.administrative_data;
+  const supaPowas =
+    profileData.fliiinker_profile?.supa_powa || profileData.supa_powa || [];
   const services = profileData.services || [];
-  const description = profileData.fliiinker_profile?.description || profileData.description;
+  const description =
+    profileData.fliiinker_profile?.description || profileData.description;
 
   console.log("Données complètes pour debug:", {
     profileData,
@@ -398,7 +496,9 @@ const MeetingModal: React.FC<MeetingModalProps> = ({ isVisible, meeting, loading
         <Title level={4}>
           Détails du rendez-vous
           {meetingData && (
-            <Tag className={`status-tag ${meetingData.is_finish ? "validated" : "pending"}`}>
+            <Tag
+              className={`status-tag ${meetingData.is_finish ? "validated" : "pending"}`}
+            >
               {meetingData.is_finish ? "Terminé" : "En attente"}
             </Tag>
           )}
@@ -419,13 +519,12 @@ const MeetingModal: React.FC<MeetingModalProps> = ({ isVisible, meeting, loading
         onCancel={() => {
           handleCloseImageModal();
           // Si c'est une URL d'objet blob, la révoquer pour libérer la mémoire
-          if (selectedImage && !selectedImage.startsWith('http')) {
+          if (selectedImage && !selectedImage.startsWith("http")) {
             URL.revokeObjectURL(selectedImage);
           }
         }}
         footer={null}
         centered
-        
       >
         {selectedImage && (
           <img
@@ -443,7 +542,11 @@ const MeetingModal: React.FC<MeetingModalProps> = ({ isVisible, meeting, loading
       <div className="profile-card">
         <Avatar
           className="large-avatar"
-          src={profileData.avatar ? `${import.meta.env.VITE_SUPABASE_STORAGE_URL_FOR_IMAGES}/${profileData.avatar}` : undefined}
+          src={
+            profileData.avatar
+              ? `${import.meta.env.VITE_SUPABASE_STORAGE_URL_FOR_IMAGES}/${profileData.avatar}`
+              : undefined
+          }
           size={80}
           icon={<UserOutlined />}
           style={{
@@ -456,9 +559,14 @@ const MeetingModal: React.FC<MeetingModalProps> = ({ isVisible, meeting, loading
             objectFit: "cover",
             cursor: profileData.avatar ? "pointer" : "default",
           }}
-          onClick={() => profileData.avatar && handleImageClick(profileData.avatar)}
+          onClick={() =>
+            profileData.avatar && handleImageClick(profileData.avatar)
+          }
           onError={() => {
-            console.error("Erreur de chargement de l'avatar:", profileData.avatar);
+            console.error(
+              "Erreur de chargement de l'avatar:",
+              profileData.avatar,
+            );
             return false;
           }}
         />
@@ -466,25 +574,43 @@ const MeetingModal: React.FC<MeetingModalProps> = ({ isVisible, meeting, loading
           <Title level={3} style={{ marginTop: 0, marginBottom: 8 }}>
             {profileData.first_name} {profileData.last_name}
             {(profileData.fliiinker_profile?.is_pro || profileData.is_pro) && (
-              <Tag color="gold" style={{ marginLeft: 10 }}>PRO</Tag>
+              <Tag color="gold" style={{ marginLeft: 10 }}>
+                PRO
+              </Tag>
             )}
           </Title>
-          <Text type="secondary" style={{ fontSize: 16, display: "block", marginBottom: 12 }}>
+          <Text
+            type="secondary"
+            style={{ fontSize: 16, display: "block", marginBottom: 12 }}
+          >
             {profileData.fliiinker_profile?.tagline ||
               profileData.tagline ||
-              (description ? description.substring(0, 50) + (description.length > 50 ? "..." : "") : "Fliiinker")}
+              (description
+                ? description.substring(0, 50) +
+                  (description.length > 50 ? "..." : "")
+                : "Fliiinker")}
           </Text>
 
           <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
             {Array.isArray(profileData.fliiinker_profile?.spoken_languages) &&
-              profileData.fliiinker_profile?.spoken_languages.map((lang: any, index: number) => (
-                <Tag key={index} color="blue" icon={lang.emoji ? <span>{lang.emoji}</span> : null}>
-                  {typeof lang === "object" ? lang.name || "Langue" : lang}
-                </Tag>
-              ))}
+              profileData.fliiinker_profile?.spoken_languages.map(
+                (lang: any, index: number) => (
+                  <Tag
+                    key={index}
+                    color="blue"
+                    icon={lang.emoji ? <span>{lang.emoji}</span> : null}
+                  >
+                    {typeof lang === "object" ? lang.name || "Langue" : lang}
+                  </Tag>
+                ),
+              )}
             {Array.isArray(profileData.spoken_languages) &&
               profileData.spoken_languages.map((lang: any, index: number) => (
-                <Tag key={index} color="blue" icon={lang.emoji ? <span>{lang.emoji}</span> : null}>
+                <Tag
+                  key={index}
+                  color="blue"
+                  icon={lang.emoji ? <span>{lang.emoji}</span> : null}
+                >
                   {typeof lang === "object" ? lang.name || "Langue" : lang}
                 </Tag>
               ))}
@@ -522,7 +648,11 @@ const MeetingModal: React.FC<MeetingModalProps> = ({ isVisible, meeting, loading
           <Title level={5}>Détails du rendez-vous</Title>
           <div className="detail-item">
             <CalendarOutlined style={{ color: "#1890ff" }} />
-            <Text>{meetingDate ? meetingDate.format("DD MMMM YYYY") : "Date non définie"}</Text>
+            <Text>
+              {meetingDate
+                ? meetingDate.format("DD MMMM YYYY")
+                : "Date non définie"}
+            </Text>
           </div>
           <div className="detail-item">
             <ClockCircleOutlined style={{ color: "#52c41a" }} />
@@ -530,7 +660,9 @@ const MeetingModal: React.FC<MeetingModalProps> = ({ isVisible, meeting, loading
           </div>
           <div className="detail-item">
             <EnvironmentOutlined style={{ color: "#faad14" }} />
-            <Text>Fuseau horaire: {meetingData.timezone || "Non spécifié"}</Text>
+            <Text>
+              Fuseau horaire: {meetingData.timezone || "Non spécifié"}
+            </Text>
           </div>
           <div className="detail-item">
             <MailOutlined style={{ color: "#eb2f96" }} />
@@ -556,10 +688,16 @@ const MeetingModal: React.FC<MeetingModalProps> = ({ isVisible, meeting, loading
 
       {supaPowas && supaPowas.length > 0 && (
         <div className="glass-section">
-          <Text strong style={{ display: "block", marginBottom: 8 }}>Super Pouvoirs:</Text>
+          <Text strong style={{ display: "block", marginBottom: 8 }}>
+            Super Pouvoirs:
+          </Text>
           <Space wrap>
             {supaPowas.map((power: any, index: number) => (
-              <Tag key={index} color="purple" icon={power.emoji ? <span>{power.emoji}</span> : null}>
+              <Tag
+                key={index}
+                color="purple"
+                icon={power.emoji ? <span>{power.emoji}</span> : null}
+              >
                 {typeof power === "object" ? power.name : power}
               </Tag>
             ))}
@@ -569,12 +707,20 @@ const MeetingModal: React.FC<MeetingModalProps> = ({ isVisible, meeting, loading
 
       <div className="meeting-stats">
         <div className="stat-card">
-          <TrophyOutlined style={{ fontSize: 24, color: "#faad14", marginBottom: 8 }} />
-          <Text strong>{profileData.fliiinker_profile?.degree || profileData.degree || "Non spécifié"}</Text>
+          <TrophyOutlined
+            style={{ fontSize: 24, color: "#faad14", marginBottom: 8 }}
+          />
+          <Text strong>
+            {profileData.fliiinker_profile?.degree ||
+              profileData.degree ||
+              "Non spécifié"}
+          </Text>
           <Text type="secondary">Diplôme</Text>
         </div>
         <div className="stat-card">
-          <UserOutlined style={{ fontSize: 24, color: "#1890ff", marginBottom: 8 }} />
+          <UserOutlined
+            style={{ fontSize: 24, color: "#1890ff", marginBottom: 8 }}
+          />
           <Text strong>
             {(() => {
               const gender = profileData.gender;
@@ -588,7 +734,9 @@ const MeetingModal: React.FC<MeetingModalProps> = ({ isVisible, meeting, loading
         </div>
       </div>
 
-      {(profileData.Pictures1 || profileData.Pictures2 || profileData.Pictures3) && (
+      {(profileData.Pictures1 ||
+        profileData.Pictures2 ||
+        profileData.Pictures3) && (
         <>
           <Divider style={{ margin: "16px 0" }} />
           <Title level={5}>Photos du Plüm</Title>
@@ -605,8 +753,16 @@ const MeetingModal: React.FC<MeetingModalProps> = ({ isVisible, meeting, loading
                     borderRadius: 8,
                     cursor: "pointer",
                   }}
-                  onClick={() => profileData.Pictures1 && handleImageClick(profileData.Pictures1)}
-                  onError={() => console.error("Erreur de chargement de Pictures1:", profileData.Pictures1)}
+                  onClick={() =>
+                    profileData.Pictures1 &&
+                    handleImageClick(profileData.Pictures1)
+                  }
+                  onError={() =>
+                    console.error(
+                      "Erreur de chargement de Pictures1:",
+                      profileData.Pictures1,
+                    )
+                  }
                 />
               </Col>
             )}
@@ -622,8 +778,16 @@ const MeetingModal: React.FC<MeetingModalProps> = ({ isVisible, meeting, loading
                     borderRadius: 8,
                     cursor: "pointer",
                   }}
-                  onClick={() => profileData.Pictures2 && handleImageClick(profileData.Pictures2)}
-                  onError={() => console.error("Erreur de chargement de Pictures2:", profileData.Pictures2)}
+                  onClick={() =>
+                    profileData.Pictures2 &&
+                    handleImageClick(profileData.Pictures2)
+                  }
+                  onError={() =>
+                    console.error(
+                      "Erreur de chargement de Pictures2:",
+                      profileData.Pictures2,
+                    )
+                  }
                 />
               </Col>
             )}
@@ -639,8 +803,16 @@ const MeetingModal: React.FC<MeetingModalProps> = ({ isVisible, meeting, loading
                     borderRadius: 8,
                     cursor: "pointer",
                   }}
-                  onClick={() => profileData.Pictures3 && handleImageClick(profileData.Pictures3)}
-                  onError={() => console.error("Erreur de chargement de Pictures3:", profileData.Pictures3)}
+                  onClick={() =>
+                    profileData.Pictures3 &&
+                    handleImageClick(profileData.Pictures3)
+                  }
+                  onError={() =>
+                    console.error(
+                      "Erreur de chargement de Pictures3:",
+                      profileData.Pictures3,
+                    )
+                  }
                 />
               </Col>
             )}
@@ -648,61 +820,148 @@ const MeetingModal: React.FC<MeetingModalProps> = ({ isVisible, meeting, loading
         </>
       )}
 
+      {/* Section pour les photos de carte d'identité/passeport */}
+      {(() => {
+        // Exemple de chemin : 009eb577-fd92-430a-a86d-3477f090563f/back_image-1749444367347.png
+        // Tu devras remplacer ces chemins par les vrais chemins depuis profileData
+        const identityImages = {
+          frontImage: front_image,
+          backImage: back_image,
+        };
+
+        return (
+          (identityImages.frontImage || identityImages.backImage) && (
+            <>
+              <Divider style={{ margin: "16px 0" }} />
+              <Title level={5}>
+                <IdcardOutlined style={{ marginRight: 8, color: "#1890ff" }} />
+                Pièces d'identité / Passeport
+              </Title>
+              <Row gutter={[16, 16]}>
+                {identityImages.frontImage && (
+                  <Col span={12}>
+                    <Card
+                      title="Recto"
+                      className="admin-image-card"
+                      style={{ height: "100%" }}
+                    >
+                      <AdminImage
+                        imagePath={identityImages.frontImage}
+                        alt="Carte d'identité/Passeport - Recto"
+                        style={{
+                          width: "100%",
+                          height: 200,
+                          objectFit: "cover",
+                          borderRadius: 8,
+                          cursor: "pointer",
+                        }}
+                        onClick={() =>
+                          handleAdminImageClick(identityImages.frontImage || "")
+                        }
+                      />
+                    </Card>
+                  </Col>
+                )}
+                {identityImages.backImage && (
+                  <Col span={12}>
+                    <Card
+                      title="Verso"
+                      className="admin-image-card"
+                      style={{ height: "100%" }}
+                    >
+                      <AdminImage
+                        imagePath={identityImages.backImage}
+                        alt="Carte d'identité/Passeport - Verso"
+                        style={{
+                          width: "100%",
+                          height: 200,
+                          objectFit: "cover",
+                          borderRadius: 8,
+                          cursor: "pointer",
+                        }}
+                        onClick={() =>
+                          handleAdminImageClick(identityImages.backImage || "")
+                        }
+                      />
+                    </Card>
+                  </Col>
+                )}
+              </Row>
+            </>
+          )
+        );
+      })()}
+
       {/* Affichage des images administratives */}
       {(() => {
         console.log("🔍🔍🔍 Vérification des images administratives:", {
           hasProfileData: !!profileData,
-          hasAdminImages: !!(profileData?.administrative_images),
+          hasAdminImages: !!profileData?.administrative_images,
           adminImagesLength: profileData?.administrative_images?.length || 0,
-          adminImages: profileData?.administrative_images
+          adminImages: profileData?.administrative_images,
         });
-        return profileData.administrative_images && profileData.administrative_images.length > 0 && (
-          <>
-            <Divider style={{ margin: "16px 0" }} />
-            <Title level={5}>Documents administratifs</Title>
-            <Row gutter={[16, 16]}>
-              {profileData.administrative_images.map((adminImage, index) => (
-                <React.Fragment key={index}>
-                  {adminImage.front_image && (
-                    <Col span={12}>
-                      <Card title="Pièce d'identité (Recto)" className="admin-image-card">
-                        <AdminImage 
-                          imagePath={adminImage.front_image} 
-                          alt="Pièce d'identité recto"
-                          style={{
-                            width: "100%",
-                            height: 200,
-                            objectFit: "cover",
-                            borderRadius: 8,
-                            cursor: "pointer",
-                          }}
-                          onClick={() => handleAdminImageClick(adminImage.front_image || "")}
-                        />
-                      </Card>
-                    </Col>
-                  )}
-                  {adminImage.back_image && (
-                    <Col span={12}>
-                      <Card title="Pièce d'identité (Verso)" className="admin-image-card">
-                        <AdminImage 
-                          imagePath={adminImage.back_image} 
-                          alt="Pièce d'identité verso"
-                          style={{
-                            width: "100%",
-                            height: 200,
-                            objectFit: "cover",
-                            borderRadius: 8,
-                            cursor: "pointer",
-                          }}
-                          onClick={() => handleAdminImageClick(adminImage.back_image || "")}
-                        />
-                      </Card>
-                    </Col>
-                  )}
-                </React.Fragment>
-              ))}
-            </Row>
-          </>
+        return (
+          profileData.administrative_images &&
+          profileData.administrative_images.length > 0 && (
+            <>
+              <Divider style={{ margin: "16px 0" }} />
+              <Title level={5}>Documents administratifs</Title>
+              <Row gutter={[16, 16]}>
+                {profileData.administrative_images.map((adminImage, index) => (
+                  <React.Fragment key={index}>
+                    {adminImage.front_image && (
+                      <Col span={12}>
+                        <Card
+                          title="Pièce d'identité (Recto)"
+                          className="admin-image-card"
+                        >
+                          <AdminImage
+                            imagePath={adminImage.front_image}
+                            alt="Pièce d'identité recto"
+                            style={{
+                              width: "100%",
+                              height: 200,
+                              objectFit: "cover",
+                              borderRadius: 8,
+                              cursor: "pointer",
+                            }}
+                            onClick={() =>
+                              handleAdminImageClick(
+                                adminImage.front_image || "",
+                              )
+                            }
+                          />
+                        </Card>
+                      </Col>
+                    )}
+                    {adminImage.back_image && (
+                      <Col span={12}>
+                        <Card
+                          title="Pièce d'identité (Verso)"
+                          className="admin-image-card"
+                        >
+                          <AdminImage
+                            imagePath={adminImage.back_image}
+                            alt="Pièce d'identité verso"
+                            style={{
+                              width: "100%",
+                              height: 200,
+                              objectFit: "cover",
+                              borderRadius: 8,
+                              cursor: "pointer",
+                            }}
+                            onClick={() =>
+                              handleAdminImageClick(adminImage.back_image || "")
+                            }
+                          />
+                        </Card>
+                      </Col>
+                    )}
+                  </React.Fragment>
+                ))}
+              </Row>
+            </>
+          )
         );
       })()}
 
@@ -716,28 +975,35 @@ const MeetingModal: React.FC<MeetingModalProps> = ({ isVisible, meeting, loading
               className="service-card"
               title={
                 <Space>
-                  <DollarCircleOutlined style={{ color: service.is_active ? "#52c41a" : "#ff4d4f" }} />
+                  <DollarCircleOutlined
+                    style={{ color: service.is_active ? "#52c41a" : "#ff4d4f" }}
+                  />
                   <Text>
                     {service.service_type ||
                       (service.service_id === 24
                         ? "Garde d'animaux"
                         : service.service_id === 25
-                        ? "Ménage/Linge"
-                        : service.service_id === 26
-                        ? "Garde d'enfant"
-                        : `Service #${service.service_id}`)}
+                          ? "Ménage/Linge"
+                          : service.service_id === 26
+                            ? "Garde d'enfant"
+                            : `Service #${service.service_id}`)}
                   </Text>
-                  <Tag color={service.is_active ? "success" : "error"}>{service.is_active ? "Actif" : "Inactif"}</Tag>
+                  <Tag color={service.is_active ? "success" : "error"}>
+                    {service.is_active ? "Actif" : "Inactif"}
+                  </Tag>
                 </Space>
               }
             >
               <Row gutter={[16, 8]}>
                 <Col span={12}>
-                  <Text strong>Tarif horaire:</Text> {service.hourly_rate || "Non défini"} €/h
+                  <Text strong>Tarif horaire:</Text>{" "}
+                  {service.hourly_rate || "Non défini"} €/h
                 </Col>
                 <Col span={12}>
                   <Text strong>Date création:</Text>{" "}
-                  {service.created_at ? dayjs(service.created_at).format("DD/MM/YYYY") : "Non définie"}
+                  {service.created_at
+                    ? dayjs(service.created_at).format("DD/MM/YYYY")
+                    : "Non définie"}
                 </Col>
                 {service.description && (
                   <Col span={24}>
@@ -749,7 +1015,9 @@ const MeetingModal: React.FC<MeetingModalProps> = ({ isVisible, meeting, loading
                     <Space style={{ marginTop: 8 }}>
                       <TagsOutlined />
                       {service.tags.map((tag: any, i: number) => (
-                        <Tag key={i} color="blue">{tag}</Tag>
+                        <Tag key={i} color="blue">
+                          {tag}
+                        </Tag>
                       ))}
                     </Space>
                   </Col>
@@ -772,9 +1040,15 @@ const MeetingModal: React.FC<MeetingModalProps> = ({ isVisible, meeting, loading
                   className="address-card"
                   title={
                     <Space>
-                      <EnvironmentOutlined style={{ color: address.is_default ? "#52c41a" : "#1890ff" }} />
+                      <EnvironmentOutlined
+                        style={{
+                          color: address.is_default ? "#52c41a" : "#1890ff",
+                        }}
+                      />
                       <Text strong>{address.name}</Text>
-                      {address.is_default && <Tag color="success">Par défaut</Tag>}
+                      {address.is_default && (
+                        <Tag color="success">Par défaut</Tag>
+                      )}
                     </Space>
                   }
                 >
@@ -790,7 +1064,9 @@ const MeetingModal: React.FC<MeetingModalProps> = ({ isVisible, meeting, loading
               ))}
             </Col>
             <Col span={12}>
-              <div style={{ height: "300px", width: "100%", position: "relative" }}>
+              <div
+                style={{ height: "300px", width: "100%", position: "relative" }}
+              >
                 <div className="map-container" ref={mapContainerRef} />
                 {!mapLoaded && (
                   <div
